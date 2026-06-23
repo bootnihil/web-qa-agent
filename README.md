@@ -52,28 +52,37 @@ tests/
     playwright.yml
 ```
 
+## Available npm Scripts
+
+| Command            | Purpose                                |
+| ------------------ | -------------------------------------- |
+| `npm test`         | Runs the full Playwright test suite    |
+| `npm run test:ui`  | Runs UI tests only                     |
+| `npm run test:api` | Runs API tests only                    |
+| `npm run report`   | Opens the local Playwright HTML report |
+
 ## Run All Tests
 
 ```bash
-npx playwright test
+npm test
 ```
 
 ## Run UI Tests Only
 
 ```bash
-npx playwright test --project=ui-chromium
+npm run test:ui
 ```
 
 ## Run API Tests Only
 
 ```bash
-npx playwright test --project=api
+npm run test:api
 ```
 
 ## Open the HTML Report
 
 ```bash
-npx playwright show-report
+npm run report
 ```
 
 ## Notes
