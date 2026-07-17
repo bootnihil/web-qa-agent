@@ -1,16 +1,49 @@
 import { chromium } from '@playwright/test';
 import { evaluatePageObservation } from './analysis/evaluate-page';
-import { inspectNavigation } from './browser/inspect-navigation';
+import {
+  inspectNavigation,
+  type NavigationLink
+} from './browser/inspect-navigation';
 import { visitApprovedLink } from './browser/visit-approved-link';
 import { chooseNavigationLink } from './decisions/choose-navigation-link';
+import {
+  getUnvisitedLinks,
+  markUrlVisited,
+  normalizeUrlForComparison
+} from './exploration/visited-links';
 import {
   createRunId,
   getHighestSeverity
 } from './reporting/report-utils';
-import type { SiteAgentReport } from './reporting/report-types';
+import type {
+  InspectedPageResult,
+  SiteAgentReport
+} from './reporting/report-types';
 import { writeJsonReport } from './reporting/write-json-report';
 import { writeMarkdownReport } from './reporting/write-markdown-report';
 import { getSiteConfig } from './sites';
+
+function addLinksToPool(
+  linkPool: Map<string, NavigationLink>,
+  links: NavigationLink[]
+): number {
+  let addedCount = 0;
+
+  for (const link of links) {
+    const normalizedUrl = normalizeUrlForComparison(
+      link.url
+    );
+
+    if (linkPool.has(normalizedUrl)) {
+      continue;
+    }
+
+    linkPool.set(normalizedUrl, link);
+    addedCount += 1;
+  }
+
+  return addedCount;
+}
 
 async function main(): Promise<void> {
   const startedAt = new Date();
@@ -30,6 +63,8 @@ async function main(): Promise<void> {
   console.log(`Run ID: ${runId}`);
   console.log(`Selected site: ${site.name}`);
   console.log(`Start URL: ${site.startUrl}`);
+  console.log(`Maximum pages: ${site.maxPages}`);
+  console.log(`Maximum agent steps: ${site.maxAgentSteps}`);
 
   const browser = await chromium.launch({
     headless: true
@@ -65,89 +100,186 @@ async function main(): Promise<void> {
     console.log(`Final URL: ${homepageObservation.finalUrl}`);
     console.log(`Title: ${homepageObservation.title}`);
 
-    const navigationLinks = await inspectNavigation(
+    const visitedUrls = new Set<string>();
+
+    markUrlVisited(
+      visitedUrls,
+      homepageObservation.requestedUrl
+    );
+
+    markUrlVisited(
+      visitedUrls,
+      homepageObservation.finalUrl
+    );
+
+    const linkPool = new Map<string, NavigationLink>();
+
+    const homepageLinks = await inspectNavigation(
       page,
       site.allowedHosts
     );
 
+    addLinksToPool(linkPool, homepageLinks);
+
     console.log(
-      `\nSafe navigation candidates found: ${navigationLinks.length}`
+      `\nInitial safe navigation candidates found: ${homepageLinks.length}`
     );
 
-    const decision = await chooseNavigationLink(
-      site,
-      navigationLinks
-    );
+    const inspectedPages: InspectedPageResult[] = [];
 
-    if (decision.type === 'finish') {
-      console.log('\nAgent decision: FINISH');
-      console.log(`Summary: ${decision.summary}`);
+    let agentSteps = 0;
 
-      const report: SiteAgentReport = {
-        runId,
-        startedAt: startedAt.toISOString(),
-        finishedAt: new Date().toISOString(),
-        site: {
-          id: site.id,
-          name: site.name,
-          startUrl: site.startUrl
+    let outcome: SiteAgentReport['outcome'] | null = null;
+
+    while (
+      inspectedPages.length < site.maxPages &&
+      agentSteps < site.maxAgentSteps
+    ) {
+      const unvisitedLinks = getUnvisitedLinks(
+        Array.from(linkPool.values()),
+        visitedUrls
+      );
+
+      // Keep each Gemini decision small and predictable.
+      const candidateLinks = unvisitedLinks.slice(0, 20);
+
+      console.log(
+        `\nExploration step ${agentSteps + 1}/${site.maxAgentSteps}`
+      );
+      console.log(
+        `Pages inspected: ${inspectedPages.length}/${site.maxPages}`
+      );
+      console.log(
+        `Unvisited safe candidates available: ${unvisitedLinks.length}`
+      );
+
+      if (candidateLinks.length === 0) {
+        outcome = {
+          type: 'finished',
+          summary:
+            'No unvisited safe navigation links remained.'
+        };
+
+        console.log('\nAgent exploration finished:');
+        console.log(outcome.summary);
+
+        break;
+      }
+
+      agentSteps += 1;
+
+      const decision = await chooseNavigationLink(
+        site,
+        candidateLinks
+      );
+
+      if (decision.type === 'finish') {
+        outcome = {
+          type: 'finished',
+          summary: decision.summary
+        };
+
+        console.log('\nAgent decision: FINISH');
+        console.log(`Summary: ${decision.summary}`);
+
+        break;
+      }
+
+      console.log('\nAgent selected a navigation target:');
+      console.log(`Text: ${decision.link.text}`);
+      console.log(`URL: ${decision.link.url}`);
+      console.log(`Reason: ${decision.reason}`);
+
+      markUrlVisited(
+        visitedUrls,
+        decision.link.url
+      );
+
+      const pageObservation = await visitApprovedLink(
+        page,
+        decision.link,
+        site.allowedHosts
+      );
+
+      markUrlVisited(
+        visitedUrls,
+        pageObservation.finalUrl
+      );
+
+      console.log('\nSelected page visited successfully:');
+      console.log(
+        JSON.stringify(pageObservation, null, 2)
+      );
+
+      const findings = evaluatePageObservation(
+        pageObservation
+      );
+
+      if (findings.length === 0) {
+        console.log(
+          '\nDeterministic evaluation: no obvious issues found.'
+        );
+      } else {
+        console.log(
+          `\nDeterministic evaluation: ${findings.length} potential issue(s) found.`
+        );
+
+        console.log(
+          JSON.stringify(findings, null, 2)
+        );
+      }
+
+      inspectedPages.push({
+        selection: {
+          link: decision.link,
+          reason: decision.reason
         },
-        homepage: homepageObservation,
-        selection: null,
-        inspectedPages: [],
-        summary: {
-          pagesInspected: 0,
-          findingsCount: 0,
-          highestSeverity: 'none'
-        }
-      };
+        observation: pageObservation,
+        findings
+      });
 
-      const writtenJsonReport = await writeJsonReport(report);
-      const writtenMarkdownReport = await writeMarkdownReport(report);
-
-      console.log(
-        `\nJSON report saved: ${writtenJsonReport.filePath}`
-      );
-      console.log(
-        `Markdown report saved: ${writtenMarkdownReport.filePath}`
+      const discoveredLinks = await inspectNavigation(
+        page,
+        site.allowedHosts
       );
 
-      console.log('\nAgent run complete.');
-      return;
-    }
-
-    console.log('\nAgent selected a navigation target:');
-    console.log(`Text: ${decision.link.text}`);
-    console.log(`URL: ${decision.link.url}`);
-    console.log(`Reason: ${decision.reason}`);
-
-    const pageObservation = await visitApprovedLink(
-      page,
-      decision.link,
-      site.allowedHosts
-    );
-
-    console.log('\nSelected page visited successfully:');
-    console.log(
-      JSON.stringify(pageObservation, null, 2)
-    );
-
-    const findings = evaluatePageObservation(
-      pageObservation
-    );
-
-    if (findings.length === 0) {
-      console.log(
-        '\nDeterministic evaluation: no obvious issues found.'
+      const newlyAddedLinks = addLinksToPool(
+        linkPool,
+        discoveredLinks
       );
-    } else {
+
       console.log(
-        `\nDeterministic evaluation: ${findings.length} potential issue(s) found.`
+        `\nAdditional safe links discovered on this page: ${newlyAddedLinks}`
       );
       console.log(
-        JSON.stringify(findings, null, 2)
+        `Total unique safe links in pool: ${linkPool.size}`
       );
     }
+
+    if (outcome === null) {
+      if (inspectedPages.length >= site.maxPages) {
+        outcome = {
+          type: 'completed',
+          summary:
+            `Reached the configured page limit of ${site.maxPages}.`
+        };
+      } else if (agentSteps >= site.maxAgentSteps) {
+        outcome = {
+          type: 'completed',
+          summary:
+            `Reached the configured agent-step limit of ${site.maxAgentSteps}.`
+        };
+      } else {
+        outcome = {
+          type: 'completed',
+          summary: 'Exploration completed successfully.'
+        };
+      }
+    }
+
+    const allFindings = inspectedPages.flatMap(
+      (pageResult) => pageResult.findings
+    );
 
     const report: SiteAgentReport = {
       runId,
@@ -159,29 +291,32 @@ async function main(): Promise<void> {
         startUrl: site.startUrl
       },
       homepage: homepageObservation,
-      selection: {
-        link: decision.link,
-        reason: decision.reason
-      },
-      inspectedPages: [
-        {
-          observation: pageObservation,
-          findings
-        }
-      ],
+      outcome,
+      inspectedPages,
       summary: {
-        pagesInspected: 1,
-        findingsCount: findings.length,
-        highestSeverity: getHighestSeverity(findings)
+        pagesInspected: inspectedPages.length,
+        findingsCount: allFindings.length,
+        highestSeverity: getHighestSeverity(
+          allFindings
+        )
       }
     };
 
-    const writtenJsonReport = await writeJsonReport(report);
-    const writtenMarkdownReport = await writeMarkdownReport(report);
+    const writtenJsonReport = await writeJsonReport(
+      report
+    );
+
+    const writtenMarkdownReport =
+      await writeMarkdownReport(report);
+
+    console.log('\nExploration outcome:');
+    console.log(`Type: ${outcome.type}`);
+    console.log(`Summary: ${outcome.summary}`);
 
     console.log(
       `\nJSON report saved: ${writtenJsonReport.filePath}`
     );
+
     console.log(
       `Markdown report saved: ${writtenMarkdownReport.filePath}`
     );

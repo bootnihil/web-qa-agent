@@ -25,7 +25,7 @@ export async function writeMarkdownReport(
   );
 
   const lines: string[] = [
-    `# Web QA Agent Report`,
+    '# Web QA Agent Report',
     '',
     `**Site:** ${report.site.name}`,
     `**Run ID:** ${report.runId}`,
@@ -37,6 +37,8 @@ export async function writeMarkdownReport(
     `- Pages inspected: ${report.summary.pagesInspected}`,
     `- Findings: ${report.summary.findingsCount}`,
     `- Highest severity: ${report.summary.highestSeverity}`,
+    `- Outcome: ${report.outcome.type}`,
+    `- Outcome summary: ${report.outcome.summary}`,
     '',
     '## Homepage',
     '',
@@ -47,30 +49,33 @@ export async function writeMarkdownReport(
     ''
   ];
 
-  if (report.selection === null) {
+  if (report.inspectedPages.length === 0) {
     lines.push(
-      '## Agent Decision',
+      '## Inspected Pages',
       '',
-      'No navigation target was selected.',
-      ''
-    );
-  } else {
-    lines.push(
-      '## Agent Selection',
-      '',
-      `- Link text: ${report.selection.link.text}`,
-      `- URL: ${report.selection.link.url}`,
-      `- Reason: ${report.selection.reason}`,
+      'No additional pages were inspected.',
       ''
     );
   }
 
   report.inspectedPages.forEach((pageResult, index) => {
     const pageNumber = index + 1;
-    const { observation, findings } = pageResult;
+    const {
+      selection,
+      observation,
+      findings
+    } = pageResult;
 
     lines.push(
       `## Inspected Page ${pageNumber}`,
+      '',
+      '### Agent Selection',
+      '',
+      `- Link text: ${selection.link.text}`,
+      `- Selected URL: ${selection.link.url}`,
+      `- Reason: ${selection.reason}`,
+      '',
+      '### Page Observation',
       '',
       `- Requested URL: ${observation.requestedUrl}`,
       `- Final URL: ${observation.finalUrl}`,
@@ -82,7 +87,10 @@ export async function writeMarkdownReport(
     );
 
     if (observation.headings.length === 0) {
-      lines.push('No H1 or H2 headings were found.', '');
+      lines.push(
+        'No H1 or H2 headings were found.',
+        ''
+      );
     } else {
       observation.headings.forEach((heading) => {
         lines.push(`- ${heading}`);
@@ -94,7 +102,10 @@ export async function writeMarkdownReport(
     lines.push('### Findings', '');
 
     if (findings.length === 0) {
-      lines.push('No obvious issues were detected.', '');
+      lines.push(
+        'No obvious issues were detected.',
+        ''
+      );
     } else {
       findings.forEach((finding) => {
         lines.push(

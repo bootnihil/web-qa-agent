@@ -15,22 +15,33 @@ export interface SelectedNavigationTarget {
 }
 
 export interface InspectedPageResult {
+  selection: SelectedNavigationTarget;
   observation: VisitedPageObservation;
   findings: PageFinding[];
+}
+
+export interface AgentRunOutcome {
+  type: 'completed' | 'finished';
+  summary: string;
 }
 
 export interface SiteAgentReport {
   runId: string;
   startedAt: string;
   finishedAt: string;
+
   site: {
     id: string;
     name: string;
     startUrl: string;
   };
+
   homepage: HomepageObservation;
-  selection: SelectedNavigationTarget | null;
+
+  outcome: AgentRunOutcome;
+
   inspectedPages: InspectedPageResult[];
+
   summary: {
     pagesInspected: number;
     findingsCount: number;
