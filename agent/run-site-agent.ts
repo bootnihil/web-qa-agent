@@ -1,5 +1,6 @@
 import { chromium } from '@playwright/test';
 import { evaluatePageObservation } from './analysis/evaluate-page';
+import { collectPageDiagnostics } from './browser/collect-page-diagnostics';
 import {
   inspectNavigation,
   type NavigationLink
@@ -73,261 +74,372 @@ async function main(): Promise<void> {
   try {
     const page = await browser.newPage();
 
-    const homepageResponse = await page.goto(site.startUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000
-    });
+    const diagnosticsCollector =
+      collectPageDiagnostics(page);
 
-    const homepageFinalUrl = new URL(page.url());
-
-    if (!site.allowedHosts.includes(homepageFinalUrl.hostname)) {
-      throw new Error(
-        `Homepage redirected to disallowed host "${homepageFinalUrl.hostname}".`
-      );
-    }
-
-    const homepageObservation = {
-      requestedUrl: site.startUrl,
-      finalUrl: homepageFinalUrl.toString(),
-      title: await page.title(),
-      httpStatus: homepageResponse?.status() ?? null
-    };
-
-    console.log('\nHomepage opened:');
-    console.log(
-      `HTTP status: ${homepageObservation.httpStatus ?? 'unknown'}`
-    );
-    console.log(`Final URL: ${homepageObservation.finalUrl}`);
-    console.log(`Title: ${homepageObservation.title}`);
-
-    const visitedUrls = new Set<string>();
-
-    markUrlVisited(
-      visitedUrls,
-      homepageObservation.requestedUrl
-    );
-
-    markUrlVisited(
-      visitedUrls,
-      homepageObservation.finalUrl
-    );
-
-    const linkPool = new Map<string, NavigationLink>();
-
-    const homepageLinks = await inspectNavigation(
-      page,
-      site.allowedHosts
-    );
-
-    addLinksToPool(linkPool, homepageLinks);
-
-    console.log(
-      `\nInitial safe navigation candidates found: ${homepageLinks.length}`
-    );
-
-    const inspectedPages: InspectedPageResult[] = [];
-
-    let agentSteps = 0;
-
-    let outcome: SiteAgentReport['outcome'] | null = null;
-
-    while (
-      inspectedPages.length < site.maxPages &&
-      agentSteps < site.maxAgentSteps
-    ) {
-      const unvisitedLinks = getUnvisitedLinks(
-        Array.from(linkPool.values()),
-        visitedUrls
+    try {
+      const homepageResponse = await page.goto(
+        site.startUrl,
+        {
+          waitUntil: 'domcontentloaded',
+          timeout: 30_000
+        }
       );
 
-      // Keep each Gemini decision small and predictable.
-      const candidateLinks = unvisitedLinks.slice(0, 20);
+      const homepageFinalUrl = new URL(page.url());
 
-      console.log(
-        `\nExploration step ${agentSteps + 1}/${site.maxAgentSteps}`
-      );
-      console.log(
-        `Pages inspected: ${inspectedPages.length}/${site.maxPages}`
-      );
-      console.log(
-        `Unvisited safe candidates available: ${unvisitedLinks.length}`
-      );
-
-      if (candidateLinks.length === 0) {
-        outcome = {
-          type: 'finished',
-          summary:
-            'No unvisited safe navigation links remained.'
-        };
-
-        console.log('\nAgent exploration finished:');
-        console.log(outcome.summary);
-
-        break;
-      }
-
-      agentSteps += 1;
-
-      const decision = await chooseNavigationLink(
-        site,
-        candidateLinks
-      );
-
-      if (decision.type === 'finish') {
-        outcome = {
-          type: 'finished',
-          summary: decision.summary
-        };
-
-        console.log('\nAgent decision: FINISH');
-        console.log(`Summary: ${decision.summary}`);
-
-        break;
-      }
-
-      console.log('\nAgent selected a navigation target:');
-      console.log(`Text: ${decision.link.text}`);
-      console.log(`URL: ${decision.link.url}`);
-      console.log(`Reason: ${decision.reason}`);
-
-      markUrlVisited(
-        visitedUrls,
-        decision.link.url
-      );
-
-      const pageObservation = await visitApprovedLink(
-        page,
-        decision.link,
-        site.allowedHosts
-      );
-
-      markUrlVisited(
-        visitedUrls,
-        pageObservation.finalUrl
-      );
-
-      console.log('\nSelected page visited successfully:');
-      console.log(
-        JSON.stringify(pageObservation, null, 2)
-      );
-
-      const findings = evaluatePageObservation(
-        pageObservation
-      );
-
-      if (findings.length === 0) {
-        console.log(
-          '\nDeterministic evaluation: no obvious issues found.'
-        );
-      } else {
-        console.log(
-          `\nDeterministic evaluation: ${findings.length} potential issue(s) found.`
-        );
-
-        console.log(
-          JSON.stringify(findings, null, 2)
-        );
-      }
-
-      inspectedPages.push({
-        selection: {
-          link: decision.link,
-          reason: decision.reason
-        },
-        observation: pageObservation,
-        findings
-      });
-
-      const discoveredLinks = await inspectNavigation(
-        page,
-        site.allowedHosts
-      );
-
-      const newlyAddedLinks = addLinksToPool(
-        linkPool,
-        discoveredLinks
-      );
-
-      console.log(
-        `\nAdditional safe links discovered on this page: ${newlyAddedLinks}`
-      );
-      console.log(
-        `Total unique safe links in pool: ${linkPool.size}`
-      );
-    }
-
-    if (outcome === null) {
-      if (inspectedPages.length >= site.maxPages) {
-        outcome = {
-          type: 'completed',
-          summary:
-            `Reached the configured page limit of ${site.maxPages}.`
-        };
-      } else if (agentSteps >= site.maxAgentSteps) {
-        outcome = {
-          type: 'completed',
-          summary:
-            `Reached the configured agent-step limit of ${site.maxAgentSteps}.`
-        };
-      } else {
-        outcome = {
-          type: 'completed',
-          summary: 'Exploration completed successfully.'
-        };
-      }
-    }
-
-    const allFindings = inspectedPages.flatMap(
-      (pageResult) => pageResult.findings
-    );
-
-    const report: SiteAgentReport = {
-      runId,
-      startedAt: startedAt.toISOString(),
-      finishedAt: new Date().toISOString(),
-      site: {
-        id: site.id,
-        name: site.name,
-        startUrl: site.startUrl
-      },
-      homepage: homepageObservation,
-      outcome,
-      inspectedPages,
-      summary: {
-        pagesInspected: inspectedPages.length,
-        findingsCount: allFindings.length,
-        highestSeverity: getHighestSeverity(
-          allFindings
+      if (
+        !site.allowedHosts.includes(
+          homepageFinalUrl.hostname
         )
+      ) {
+        throw new Error(
+          `Homepage redirected to disallowed host "${homepageFinalUrl.hostname}".`
+        );
       }
-    };
 
-    const writtenJsonReport = await writeJsonReport(
-      report
-    );
+      const homepageObservation = {
+        requestedUrl: site.startUrl,
+        finalUrl: homepageFinalUrl.toString(),
+        title: await page.title(),
+        httpStatus:
+          homepageResponse?.status() ?? null
+      };
 
-    const writtenMarkdownReport =
-      await writeMarkdownReport(report);
+      console.log('\nHomepage opened:');
+      console.log(
+        `HTTP status: ${homepageObservation.httpStatus ?? 'unknown'}`
+      );
+      console.log(
+        `Final URL: ${homepageObservation.finalUrl}`
+      );
+      console.log(
+        `Title: ${homepageObservation.title}`
+      );
 
-    console.log('\nExploration outcome:');
-    console.log(`Type: ${outcome.type}`);
-    console.log(`Summary: ${outcome.summary}`);
+      const visitedUrls = new Set<string>();
 
-    console.log(
-      `\nJSON report saved: ${writtenJsonReport.filePath}`
-    );
+      markUrlVisited(
+        visitedUrls,
+        homepageObservation.requestedUrl
+      );
 
-    console.log(
-      `Markdown report saved: ${writtenMarkdownReport.filePath}`
-    );
+      markUrlVisited(
+        visitedUrls,
+        homepageObservation.finalUrl
+      );
 
-    console.log('\nAgent run complete.');
+      const linkPool = new Map<
+        string,
+        NavigationLink
+      >();
+
+      const homepageLinks =
+        await inspectNavigation(
+          page,
+          site.allowedHosts
+        );
+
+      addLinksToPool(
+        linkPool,
+        homepageLinks
+      );
+
+      console.log(
+        `\nInitial safe navigation candidates found: ${homepageLinks.length}`
+      );
+
+      const inspectedPages:
+        InspectedPageResult[] = [];
+
+      let agentSteps = 0;
+
+      let outcome:
+        SiteAgentReport['outcome'] | null = null;
+
+      while (
+        inspectedPages.length < site.maxPages &&
+        agentSteps < site.maxAgentSteps
+      ) {
+        const unvisitedLinks =
+          getUnvisitedLinks(
+            Array.from(linkPool.values()),
+            visitedUrls
+          );
+
+        const candidateLinks =
+          unvisitedLinks.slice(0, 20);
+
+        console.log(
+          `\nExploration step ${agentSteps + 1}/${site.maxAgentSteps}`
+        );
+        console.log(
+          `Pages inspected: ${inspectedPages.length}/${site.maxPages}`
+        );
+        console.log(
+          `Unvisited safe candidates available: ${unvisitedLinks.length}`
+        );
+
+        if (candidateLinks.length === 0) {
+          outcome = {
+            type: 'finished',
+            summary:
+              'No unvisited safe navigation links remained.'
+          };
+
+          console.log(
+            '\nAgent exploration finished:'
+          );
+          console.log(outcome.summary);
+
+          break;
+        }
+
+        agentSteps += 1;
+
+        const decision =
+          await chooseNavigationLink(
+            site,
+            candidateLinks
+          );
+
+        if (decision.type === 'finish') {
+          outcome = {
+            type: 'finished',
+            summary: decision.summary
+          };
+
+          console.log(
+            '\nAgent decision: FINISH'
+          );
+          console.log(
+            `Summary: ${decision.summary}`
+          );
+
+          break;
+        }
+
+        console.log(
+          '\nAgent selected a navigation target:'
+        );
+        console.log(
+          `Text: ${decision.link.text}`
+        );
+        console.log(
+          `URL: ${decision.link.url}`
+        );
+        console.log(
+          `Reason: ${decision.reason}`
+        );
+
+        markUrlVisited(
+          visitedUrls,
+          decision.link.url
+        );
+
+        /*
+         * Remove evidence collected on the previous
+         * page before opening the newly selected page.
+         */
+        diagnosticsCollector.reset();
+
+        const pageObservation =
+          await visitApprovedLink(
+            page,
+            decision.link,
+            site.allowedHosts
+          );
+
+        markUrlVisited(
+          visitedUrls,
+          pageObservation.finalUrl
+        );
+
+        /*
+         * Some resource failures and console messages
+         * arrive shortly after the main document loads.
+         * Give the page a brief, bounded collection window.
+         */
+        await page.waitForTimeout(1_000);
+
+        const diagnostics =
+          diagnosticsCollector.snapshot();
+
+        console.log(
+          '\nSelected page visited successfully:'
+        );
+        console.log(
+          JSON.stringify(
+            pageObservation,
+            null,
+            2
+          )
+        );
+
+        console.log(
+          '\nBrowser diagnostics collected:'
+        );
+        console.log(
+          `Console errors: ${diagnostics.consoleErrors.length}`
+        );
+        console.log(
+          `Failed network requests: ${diagnostics.failedRequests.length}`
+        );
+
+        const findings =
+          evaluatePageObservation(
+            pageObservation
+          );
+
+        if (findings.length === 0) {
+          console.log(
+            '\nDeterministic evaluation: no rule-based page health issues found.'
+          );
+        } else {
+          console.log(
+            `\nDeterministic evaluation: ${findings.length} potential issue(s) found.`
+          );
+
+          console.log(
+            JSON.stringify(
+              findings,
+              null,
+              2
+            )
+          );
+        }
+
+        inspectedPages.push({
+          selection: {
+            link: decision.link,
+            reason: decision.reason
+          },
+          observation: pageObservation,
+          diagnostics,
+          findings
+        });
+
+        const discoveredLinks =
+          await inspectNavigation(
+            page,
+            site.allowedHosts
+          );
+
+        const newlyAddedLinks =
+          addLinksToPool(
+            linkPool,
+            discoveredLinks
+          );
+
+        console.log(
+          `\nAdditional safe links discovered on this page: ${newlyAddedLinks}`
+        );
+        console.log(
+          `Total unique safe links in pool: ${linkPool.size}`
+        );
+      }
+
+      if (outcome === null) {
+        if (
+          inspectedPages.length >=
+          site.maxPages
+        ) {
+          outcome = {
+            type: 'completed',
+            summary:
+              `Reached the configured page limit of ${site.maxPages}.`
+          };
+        } else if (
+          agentSteps >=
+          site.maxAgentSteps
+        ) {
+          outcome = {
+            type: 'completed',
+            summary:
+              `Reached the configured agent-step limit of ${site.maxAgentSteps}.`
+          };
+        } else {
+          outcome = {
+            type: 'completed',
+            summary:
+              'Exploration completed successfully.'
+          };
+        }
+      }
+
+      const allFindings =
+        inspectedPages.flatMap(
+          (pageResult) =>
+            pageResult.findings
+        );
+
+      const report: SiteAgentReport = {
+        runId,
+        startedAt:
+          startedAt.toISOString(),
+        finishedAt:
+          new Date().toISOString(),
+        site: {
+          id: site.id,
+          name: site.name,
+          startUrl: site.startUrl
+        },
+        homepage:
+          homepageObservation,
+        outcome,
+        inspectedPages,
+        summary: {
+          pagesInspected:
+            inspectedPages.length,
+          findingsCount:
+            allFindings.length,
+          highestSeverity:
+            getHighestSeverity(
+              allFindings
+            )
+        }
+      };
+
+      const writtenJsonReport =
+        await writeJsonReport(report);
+
+      const writtenMarkdownReport =
+        await writeMarkdownReport(report);
+
+      console.log(
+        '\nExploration outcome:'
+      );
+      console.log(
+        `Type: ${outcome.type}`
+      );
+      console.log(
+        `Summary: ${outcome.summary}`
+      );
+
+      console.log(
+        `\nJSON report saved: ${writtenJsonReport.filePath}`
+      );
+
+      console.log(
+        `Markdown report saved: ${writtenMarkdownReport.filePath}`
+      );
+
+      console.log(
+        '\nAgent run complete.'
+      );
+    } finally {
+      diagnosticsCollector.dispose();
+    }
   } finally {
     await browser.close();
   }
 }
 
 main().catch((error: unknown) => {
-  console.error('Site agent run failed:', error);
+  console.error(
+    'Site agent run failed:',
+    error
+  );
+
   process.exitCode = 1;
 });

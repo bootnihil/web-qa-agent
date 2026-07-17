@@ -60,9 +60,11 @@ export async function writeMarkdownReport(
 
   report.inspectedPages.forEach((pageResult, index) => {
     const pageNumber = index + 1;
+
     const {
       selection,
       observation,
+      diagnostics,
       findings
     } = pageResult;
 
@@ -99,11 +101,68 @@ export async function writeMarkdownReport(
       lines.push('');
     }
 
-    lines.push('### Findings', '');
+    lines.push(
+      '### Browser Diagnostics',
+      '',
+      `- Console errors: ${diagnostics.consoleErrors.length}`,
+      `- Failed network requests: ${diagnostics.failedRequests.length}`,
+      '',
+      '#### Console Errors',
+      ''
+    );
+
+    if (diagnostics.consoleErrors.length === 0) {
+      lines.push(
+        'No browser console errors were recorded.',
+        ''
+      );
+    } else {
+      diagnostics.consoleErrors.forEach(
+        (consoleError, errorIndex) => {
+          lines.push(
+            `**Console error ${errorIndex + 1}**`,
+            '',
+            `- Message: ${consoleError.text}`,
+            `- Source URL: ${consoleError.sourceUrl ?? 'Unknown'}`,
+            `- Line: ${consoleError.lineNumber ?? 'Unknown'}`,
+            `- Column: ${consoleError.columnNumber ?? 'Unknown'}`,
+            ''
+          );
+        }
+      );
+    }
+
+    lines.push(
+      '#### Failed Network Requests',
+      ''
+    );
+
+    if (diagnostics.failedRequests.length === 0) {
+      lines.push(
+        'No failed network requests were recorded.',
+        ''
+      );
+    } else {
+      diagnostics.failedRequests.forEach(
+        (failedRequest, requestIndex) => {
+          lines.push(
+            `**Failed request ${requestIndex + 1}**`,
+            '',
+            `- URL: ${failedRequest.url}`,
+            `- Method: ${failedRequest.method}`,
+            `- Resource type: ${failedRequest.resourceType}`,
+            `- Failure: ${failedRequest.failureText}`,
+            ''
+          );
+        }
+      );
+    }
+
+    lines.push('### Rule-Based Findings', '');
 
     if (findings.length === 0) {
       lines.push(
-        'No obvious issues were detected.',
+        'No rule-based page health issues were detected.',
         ''
       );
     } else {

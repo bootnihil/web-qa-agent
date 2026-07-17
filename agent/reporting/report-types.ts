@@ -1,4 +1,5 @@
 import type { PageFinding } from '../analysis/evaluate-page';
+import type { PageDiagnostics } from '../browser/collect-page-diagnostics';
 import type { NavigationLink } from '../browser/inspect-navigation';
 import type { VisitedPageObservation } from '../browser/visit-approved-link';
 
@@ -17,6 +18,7 @@ export interface SelectedNavigationTarget {
 export interface InspectedPageResult {
   selection: SelectedNavigationTarget;
   observation: VisitedPageObservation;
+  diagnostics: PageDiagnostics;
   findings: PageFinding[];
 }
 
