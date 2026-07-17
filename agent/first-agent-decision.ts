@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { chromium } from '@playwright/test';
 import { z } from 'zod';
+import { inspectNavigation } from './browser/inspect-navigation';
 import { getSiteConfig } from './sites';
 
 const inspectNavigationArguments = z.object({
@@ -70,6 +71,14 @@ async function main(): Promise<void> {
       waitUntil: 'domcontentloaded'
     });
 
+    const currentHost = new URL(page.url()).hostname;
+
+    if (!site.allowedHosts.includes(currentHost)) {
+      throw new Error(
+        `Browser reached disallowed host "${currentHost}".`
+      );
+    }
+
     const headings = await page.locator('h1, h2').allTextContents();
 
     const observations = {
@@ -133,6 +142,17 @@ ${JSON.stringify(observations, null, 2)}
 
       console.log('\nAgent decision: INSPECT NAVIGATION');
       console.log(`Reason: ${argumentsResult.reason}`);
+
+      const navigationLinks = await inspectNavigation(
+        page,
+        site.allowedHosts
+      );
+
+      console.log(
+        `\nAction executed: found ${navigationLinks.length} safe navigation links.`
+      );
+      console.log(JSON.stringify(navigationLinks, null, 2));
+
       return;
     }
 
@@ -141,6 +161,7 @@ ${JSON.stringify(observations, null, 2)}
 
       console.log('\nAgent decision: FINISH');
       console.log(`Summary: ${argumentsResult.summary}`);
+
       return;
     }
 
