@@ -3,9 +3,18 @@ import { evaluatePageObservation } from './analysis/evaluate-page';
 import { inspectNavigation } from './browser/inspect-navigation';
 import { visitApprovedLink } from './browser/visit-approved-link';
 import { chooseNavigationLink } from './decisions/choose-navigation-link';
+import {
+  createRunId,
+  getHighestSeverity
+} from './reporting/report-utils';
+import type { SiteAgentReport } from './reporting/report-types';
+import { writeJsonReport } from './reporting/write-json-report';
 import { getSiteConfig } from './sites';
 
 async function main(): Promise<void> {
+  const startedAt = new Date();
+  const runId = createRunId(startedAt);
+
   const siteId = process.argv[2] ?? 'aidoc';
   const site = getSiteConfig(siteId);
 
@@ -17,6 +26,7 @@ async function main(): Promise<void> {
     );
   }
 
+  console.log(`Run ID: ${runId}`);
   console.log(`Selected site: ${site.name}`);
   console.log(`Start URL: ${site.startUrl}`);
 
@@ -40,12 +50,19 @@ async function main(): Promise<void> {
       );
     }
 
+    const homepageObservation = {
+      requestedUrl: site.startUrl,
+      finalUrl: homepageFinalUrl.toString(),
+      title: await page.title(),
+      httpStatus: homepageResponse?.status() ?? null
+    };
+
     console.log('\nHomepage opened:');
     console.log(
-      `HTTP status: ${homepageResponse?.status() ?? 'unknown'}`
+      `HTTP status: ${homepageObservation.httpStatus ?? 'unknown'}`
     );
-    console.log(`Final URL: ${homepageFinalUrl.toString()}`);
-    console.log(`Title: ${await page.title()}`);
+    console.log(`Final URL: ${homepageObservation.finalUrl}`);
+    console.log(`Title: ${homepageObservation.title}`);
 
     const navigationLinks = await inspectNavigation(
       page,
@@ -64,6 +81,30 @@ async function main(): Promise<void> {
     if (decision.type === 'finish') {
       console.log('\nAgent decision: FINISH');
       console.log(`Summary: ${decision.summary}`);
+
+      const report: SiteAgentReport = {
+        runId,
+        startedAt: startedAt.toISOString(),
+        finishedAt: new Date().toISOString(),
+        site: {
+          id: site.id,
+          name: site.name,
+          startUrl: site.startUrl
+        },
+        homepage: homepageObservation,
+        selection: null,
+        inspectedPages: [],
+        summary: {
+          pagesInspected: 0,
+          findingsCount: 0,
+          highestSeverity: 'none'
+        }
+      };
+
+      const writtenReport = await writeJsonReport(report);
+
+      console.log(`\nJSON report saved: ${writtenReport.filePath}`);
+      console.log('\nAgent run complete.');
       return;
     }
 
@@ -100,6 +141,36 @@ async function main(): Promise<void> {
       );
     }
 
+    const report: SiteAgentReport = {
+      runId,
+      startedAt: startedAt.toISOString(),
+      finishedAt: new Date().toISOString(),
+      site: {
+        id: site.id,
+        name: site.name,
+        startUrl: site.startUrl
+      },
+      homepage: homepageObservation,
+      selection: {
+        link: decision.link,
+        reason: decision.reason
+      },
+      inspectedPages: [
+        {
+          observation: pageObservation,
+          findings
+        }
+      ],
+      summary: {
+        pagesInspected: 1,
+        findingsCount: findings.length,
+        highestSeverity: getHighestSeverity(findings)
+      }
+    };
+
+    const writtenReport = await writeJsonReport(report);
+
+    console.log(`\nJSON report saved: ${writtenReport.filePath}`);
     console.log('\nAgent run complete.');
   } finally {
     await browser.close();
