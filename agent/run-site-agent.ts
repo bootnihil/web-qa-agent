@@ -1,4 +1,5 @@
 import { chromium } from '@playwright/test';
+import { evaluatePageObservation } from './analysis/evaluate-page';
 import { inspectNavigation } from './browser/inspect-navigation';
 import { visitApprovedLink } from './browser/visit-approved-link';
 import { chooseNavigationLink } from './decisions/choose-navigation-link';
@@ -19,7 +20,9 @@ async function main(): Promise<void> {
   console.log(`Selected site: ${site.name}`);
   console.log(`Start URL: ${site.startUrl}`);
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true
+  });
 
   try {
     const page = await browser.newPage();
@@ -38,7 +41,9 @@ async function main(): Promise<void> {
     }
 
     console.log('\nHomepage opened:');
-    console.log(`HTTP status: ${homepageResponse?.status() ?? 'unknown'}`);
+    console.log(
+      `HTTP status: ${homepageResponse?.status() ?? 'unknown'}`
+    );
     console.log(`Final URL: ${homepageFinalUrl.toString()}`);
     console.log(`Title: ${await page.title()}`);
 
@@ -74,7 +79,26 @@ async function main(): Promise<void> {
     );
 
     console.log('\nSelected page visited successfully:');
-    console.log(JSON.stringify(pageObservation, null, 2));
+    console.log(
+      JSON.stringify(pageObservation, null, 2)
+    );
+
+    const findings = evaluatePageObservation(
+      pageObservation
+    );
+
+    if (findings.length === 0) {
+      console.log(
+        '\nDeterministic evaluation: no obvious issues found.'
+      );
+    } else {
+      console.log(
+        `\nDeterministic evaluation: ${findings.length} potential issue(s) found.`
+      );
+      console.log(
+        JSON.stringify(findings, null, 2)
+      );
+    }
 
     console.log('\nAgent run complete.');
   } finally {
