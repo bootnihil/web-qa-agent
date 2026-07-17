@@ -10,7 +10,8 @@
     "report": "playwright show-report",
     "agent:check": "tsx agent/browser-check.ts",
     "agent:gemini-check": "tsx agent/gemini-sdk-check.ts",
-    "agent:api-check": "tsx agent/gemini-api-check.ts"
+    "agent:api-check": "tsx agent/gemini-api-check.ts",
+    "agent:decide": "tsx agent/first-agent-decision.ts"
   },
   "keywords": [
     "qa",
