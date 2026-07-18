@@ -20,7 +20,8 @@
     "agent:visited-links-check": "tsx agent/visited-links-check.ts",
     "agent:page-diagnostics-check": "tsx agent/page-diagnostics-check.ts",
     "agent:diagnostics-classification-check": "tsx agent/diagnostics-classification-check.ts",
-    "agent:screenshot-check": "tsx agent/screenshot-check.ts"
+    "agent:screenshot-check": "tsx agent/screenshot-check.ts",
+    "agent:screenshot-trigger-check": "tsx agent/screenshot-trigger-check.ts"
   },
   "keywords": [
     "qa",
