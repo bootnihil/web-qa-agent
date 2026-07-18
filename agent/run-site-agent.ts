@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test';
 import { classifyDiagnostics } from './analysis/classify-diagnostics';
 import { evaluatePageObservation } from './analysis/evaluate-page';
+import { capturePageScreenshot } from './browser/capture-page-screenshot';
 import { collectPageDiagnostics } from './browser/collect-page-diagnostics';
 import {
   inspectNavigation,
@@ -340,6 +341,46 @@ async function main(): Promise<void> {
           );
         }
 
+        /*
+         * Capture visual evidence only when something
+         * potentially meaningful requires investigation.
+         *
+         * Ignored telemetry noise alone does not justify
+         * creating screenshot evidence.
+         */
+        const shouldCaptureScreenshot =
+          findings.length > 0 ||
+          actionableRequestCount > 0 ||
+          needsReviewCount > 0;
+
+        let screenshotPath: string | null = null;
+
+        if (shouldCaptureScreenshot) {
+          const pageNumber =
+            inspectedPages.length + 1;
+
+          const screenshot =
+            await capturePageScreenshot(
+              page,
+              runId,
+              pageNumber
+            );
+
+          screenshotPath =
+            screenshot.filePath;
+
+          console.log(
+            '\nScreenshot evidence captured:'
+          );
+          console.log(
+            screenshotPath
+          );
+        } else {
+          console.log(
+            '\nScreenshot evidence: not required for this page.'
+          );
+        }
+
         inspectedPages.push({
           selection: {
             link: decision.link,
@@ -348,6 +389,7 @@ async function main(): Promise<void> {
           observation: pageObservation,
           diagnostics,
           classifiedDiagnostics,
+          screenshotPath,
           findings
         });
 

@@ -69,6 +69,7 @@ export async function writeMarkdownReport(
       observation,
       diagnostics,
       classifiedDiagnostics,
+      screenshotPath,
       findings
     } = pageResult;
 
@@ -135,6 +136,23 @@ export async function writeMarkdownReport(
       `- Needs review: ${needsReviewCount}`,
       `- Ignored noise: ${ignoredNoiseCount}`,
       '',
+      '### Screenshot Evidence',
+      ''
+    );
+
+    if (screenshotPath === null) {
+      lines.push(
+        'No screenshot was captured because no finding or review-worthy diagnostic triggered evidence collection.',
+        ''
+      );
+    } else {
+      lines.push(
+        `- Screenshot path: ${screenshotPath}`,
+        ''
+      );
+    }
+
+    lines.push(
       '#### Console Errors',
       ''
     );

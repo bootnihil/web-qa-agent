@@ -31,6 +31,12 @@ export interface InspectedPageResult {
    */
   classifiedDiagnostics: ClassifiedDiagnostics;
 
+  /*
+   * Screenshot evidence is captured only when the page
+   * has something potentially worth investigating.
+   */
+  screenshotPath: string | null;
+
   findings: PageFinding[];
 }
 
