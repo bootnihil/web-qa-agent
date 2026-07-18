@@ -12,13 +12,41 @@ const validResponse = {
       evidence:
         'The visible page text contains "Lorem ipsum".',
       reasoning:
-        'Placeholder copy on a production page may indicate unfinished content.',
+        'Placeholder copy may indicate unfinished content.',
       suggestedCheck:
-        'Open the page and confirm whether the text is intentionally published.'
+        'Confirm whether the text is intentionally published.',
+      evidenceTarget: null
     }
   ],
   summary:
     'One potential content-quality issue was identified.'
+};
+
+const targetedResponse = {
+  findings: [
+    {
+      category: 'content',
+      severity: 'low',
+      confidence: 'high',
+      title:
+        'Misspelled country option in dropdown',
+      evidence:
+        'The Country dropdown contains both "Ecuador" and "Equador".',
+      reasoning:
+        '"Equador" appears to be an additional misspelled option.',
+      suggestedCheck:
+        'Verify the intended country list and remove or correct the misspelled option.',
+      evidenceTarget: {
+        kind: 'select-option',
+        controlLabel: 'Country',
+        controlName: 'country',
+        controlId: 'country',
+        optionText: 'Equador'
+      }
+    }
+  ],
+  summary:
+    'One dropdown content issue was identified.'
 };
 
 const emptyResponse = {
@@ -36,7 +64,8 @@ const invalidResponse = {
       title: '',
       evidence: '',
       reasoning: '',
-      suggestedCheck: ''
+      suggestedCheck: '',
+      evidenceTarget: null
     }
   ],
   summary: ''
@@ -57,7 +86,26 @@ console.log(
   )
 );
 
-console.log('\nEmpty findings response:');
+console.log(
+  '\nTargeted response:'
+);
+
+const parsedTargeted =
+  exploratoryQaAnalysisSchema.safeParse(
+    targetedResponse
+  );
+
+console.log(
+  JSON.stringify(
+    parsedTargeted,
+    null,
+    2
+  )
+);
+
+console.log(
+  '\nEmpty findings response:'
+);
 
 const parsedEmpty =
   exploratoryQaAnalysisSchema.safeParse(
@@ -72,7 +120,9 @@ console.log(
   )
 );
 
-console.log('\nInvalid response:');
+console.log(
+  '\nInvalid response:'
+);
 
 const parsedInvalid =
   exploratoryQaAnalysisSchema.safeParse(
@@ -88,12 +138,19 @@ console.log(
 );
 
 console.log('\nSummary:');
+
 console.log(
   `Valid accepted: ${parsedValid.success}`
 );
+
+console.log(
+  `Targeted accepted: ${parsedTargeted.success}`
+);
+
 console.log(
   `Empty accepted: ${parsedEmpty.success}`
 );
+
 console.log(
   `Invalid rejected: ${!parsedInvalid.success}`
 );

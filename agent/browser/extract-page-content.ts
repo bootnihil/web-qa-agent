@@ -3,10 +3,25 @@ import type { Page } from '@playwright/test';
 const MAX_BODY_TEXT_LENGTH = 15_000;
 const MAX_LINKS = 50;
 const MAX_BUTTONS = 30;
+const MAX_SELECTS = 20;
+const MAX_OPTIONS_PER_SELECT = 250;
 
 export interface PageContentLink {
   text: string;
   url: string;
+}
+
+export interface PageSelectOption {
+  text: string;
+  value: string;
+  selected: boolean;
+}
+
+export interface PageSelectControl {
+  label: string | null;
+  name: string | null;
+  id: string | null;
+  options: PageSelectOption[];
 }
 
 export interface ExtractedPageContent {
@@ -15,6 +30,7 @@ export interface ExtractedPageContent {
   bodyText: string;
   links: PageContentLink[];
   buttons: string[];
+  selects: PageSelectControl[];
 }
 
 function normalizeText(
@@ -122,15 +138,121 @@ export async function extractPageContent(
       MAX_BUTTONS
     );
 
+  const selects = await page
+    .locator('select')
+    .evaluateAll(
+      (
+        elements,
+        limits
+      ) => {
+        return elements
+          .slice(
+            0,
+            limits.maxSelects
+          )
+          .map((element) => {
+            const select =
+              element as HTMLSelectElement;
+
+            let label: string | null =
+              null;
+
+            /*
+             * First try the native labels collection.
+             * This covers:
+             *
+             * <label for="country">Country</label>
+             * <select id="country">...</select>
+             *
+             * and:
+             *
+             * <label>
+             *   Country
+             *   <select>...</select>
+             * </label>
+             */
+            if (
+              select.labels &&
+              select.labels.length > 0
+            ) {
+              label =
+                select.labels[0]
+                  .textContent
+                  ?.replace(/\s+/g, ' ')
+                  .trim() || null;
+            }
+
+            /*
+             * Fall back to aria-label when no
+             * native HTML label is available.
+             */
+            if (!label) {
+              label =
+                select
+                  .getAttribute(
+                    'aria-label'
+                  )
+                  ?.replace(/\s+/g, ' ')
+                  .trim() || null;
+            }
+
+            const options =
+              Array.from(
+                select.options
+              )
+                .slice(
+                  0,
+                  limits.maxOptionsPerSelect
+                )
+                .map((option) => {
+                  return {
+                    text:
+                      option.text
+                        .replace(
+                          /\s+/g,
+                          ' '
+                        )
+                        .trim(),
+                    value:
+                      option.value,
+                    selected:
+                      option.selected
+                  };
+                });
+
+            return {
+              label,
+              name:
+                select.name ||
+                null,
+              id:
+                select.id ||
+                null,
+              options
+            };
+          });
+      },
+      {
+        maxSelects:
+          MAX_SELECTS,
+        maxOptionsPerSelect:
+          MAX_OPTIONS_PER_SELECT
+      }
+    );
+
   return {
     title,
-    headings: normalizedHeadings,
-    bodyText: normalizedBodyText,
-    links: links.filter(
-      (link) =>
-        link.text.length > 0 &&
-        link.url.length > 0
-    ),
-    buttons
+    headings:
+      normalizedHeadings,
+    bodyText:
+      normalizedBodyText,
+    links:
+      links.filter(
+        (link) =>
+          link.text.length > 0 &&
+          link.url.length > 0
+      ),
+    buttons,
+    selects
   };
 }
