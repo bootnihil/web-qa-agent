@@ -1,5 +1,6 @@
 import type { ClassifiedDiagnostics } from '../analysis/classify-diagnostics';
 import type { PageFinding } from '../analysis/evaluate-page';
+import type { ExploratoryQaAnalysis } from '../analysis/exploratory-qa-schema';
 import type { PageDiagnostics } from '../browser/collect-page-diagnostics';
 import type { NavigationLink } from '../browser/inspect-navigation';
 import type { VisitedPageObservation } from '../browser/visit-approved-link';
@@ -18,6 +19,7 @@ export interface SelectedNavigationTarget {
 
 export interface InspectedPageResult {
   selection: SelectedNavigationTarget;
+
   observation: VisitedPageObservation;
 
   /*
@@ -37,7 +39,16 @@ export interface InspectedPageResult {
    */
   screenshotPath: string | null;
 
+  /*
+   * Deterministic findings produced by explicit rules.
+   */
   findings: PageFinding[];
+
+  /*
+   * Evidence-grounded candidate findings produced
+   * by Gemini exploratory QA analysis.
+   */
+  exploratoryQaAnalysis: ExploratoryQaAnalysis;
 }
 
 export interface AgentRunOutcome {
@@ -67,6 +78,13 @@ export interface SiteAgentReport {
 
     findingsCount: number;
     highestSeverity: 'high' | 'medium' | 'low' | 'none';
+
+    exploratoryQaFindingsCount: number;
+    highestExploratoryQaSeverity:
+      | 'high'
+      | 'medium'
+      | 'low'
+      | 'none';
 
     actionableDiagnosticsCount: number;
     diagnosticsNeedingReviewCount: number;

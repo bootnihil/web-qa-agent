@@ -1,8 +1,11 @@
 import { chromium } from '@playwright/test';
+import { analyzePageForQa } from './analysis/analyze-page-for-qa';
 import { classifyDiagnostics } from './analysis/classify-diagnostics';
 import { evaluatePageObservation } from './analysis/evaluate-page';
+import type { ExploratoryQaFinding } from './analysis/exploratory-qa-schema';
 import { capturePageScreenshot } from './browser/capture-page-screenshot';
 import { collectPageDiagnostics } from './browser/collect-page-diagnostics';
+import { extractPageContent } from './browser/extract-page-content';
 import {
   inspectNavigation,
   type NavigationLink
@@ -48,6 +51,36 @@ function addLinksToPool(
   return addedCount;
 }
 
+function getHighestExploratoryQaSeverity(
+  findings: ExploratoryQaFinding[]
+): 'high' | 'medium' | 'low' | 'none' {
+  if (
+    findings.some(
+      (finding) => finding.severity === 'high'
+    )
+  ) {
+    return 'high';
+  }
+
+  if (
+    findings.some(
+      (finding) => finding.severity === 'medium'
+    )
+  ) {
+    return 'medium';
+  }
+
+  if (
+    findings.some(
+      (finding) => finding.severity === 'low'
+    )
+  ) {
+    return 'low';
+  }
+
+  return 'none';
+}
+
 async function main(): Promise<void> {
   const startedAt = new Date();
   const runId = createRunId(startedAt);
@@ -57,7 +90,11 @@ async function main(): Promise<void> {
 
   const configuredStartUrl = new URL(site.startUrl);
 
-  if (!site.allowedHosts.includes(configuredStartUrl.hostname)) {
+  if (
+    !site.allowedHosts.includes(
+      configuredStartUrl.hostname
+    )
+  ) {
     throw new Error(
       `Configured start host "${configuredStartUrl.hostname}" is not allowed.`
     );
@@ -67,7 +104,9 @@ async function main(): Promise<void> {
   console.log(`Selected site: ${site.name}`);
   console.log(`Start URL: ${site.startUrl}`);
   console.log(`Maximum pages: ${site.maxPages}`);
-  console.log(`Maximum agent steps: ${site.maxAgentSteps}`);
+  console.log(
+    `Maximum agent steps: ${site.maxAgentSteps}`
+  );
 
   const browser = await chromium.launch({
     headless: true
@@ -88,7 +127,9 @@ async function main(): Promise<void> {
         }
       );
 
-      const homepageFinalUrl = new URL(page.url());
+      const homepageFinalUrl = new URL(
+        page.url()
+      );
 
       if (
         !site.allowedHosts.includes(
@@ -102,7 +143,8 @@ async function main(): Promise<void> {
 
       const homepageObservation = {
         requestedUrl: site.startUrl,
-        finalUrl: homepageFinalUrl.toString(),
+        finalUrl:
+          homepageFinalUrl.toString(),
         title: await page.title(),
         httpStatus:
           homepageResponse?.status() ?? null
@@ -110,7 +152,10 @@ async function main(): Promise<void> {
 
       console.log('\nHomepage opened:');
       console.log(
-        `HTTP status: ${homepageObservation.httpStatus ?? 'unknown'}`
+        `HTTP status: ${
+          homepageObservation.httpStatus ??
+          'unknown'
+        }`
       );
       console.log(
         `Final URL: ${homepageObservation.finalUrl}`
@@ -119,7 +164,8 @@ async function main(): Promise<void> {
         `Title: ${homepageObservation.title}`
       );
 
-      const visitedUrls = new Set<string>();
+      const visitedUrls =
+        new Set<string>();
 
       markUrlVisited(
         visitedUrls,
@@ -157,15 +203,20 @@ async function main(): Promise<void> {
       let agentSteps = 0;
 
       let outcome:
-        SiteAgentReport['outcome'] | null = null;
+        SiteAgentReport['outcome'] | null =
+        null;
 
       while (
-        inspectedPages.length < site.maxPages &&
-        agentSteps < site.maxAgentSteps
+        inspectedPages.length <
+          site.maxPages &&
+        agentSteps <
+          site.maxAgentSteps
       ) {
         const unvisitedLinks =
           getUnvisitedLinks(
-            Array.from(linkPool.values()),
+            Array.from(
+              linkPool.values()
+            ),
             visitedUrls
           );
 
@@ -173,16 +224,24 @@ async function main(): Promise<void> {
           unvisitedLinks.slice(0, 20);
 
         console.log(
-          `\nExploration step ${agentSteps + 1}/${site.maxAgentSteps}`
+          `\nExploration step ${
+            agentSteps + 1
+          }/${site.maxAgentSteps}`
         );
+
         console.log(
-          `Pages inspected: ${inspectedPages.length}/${site.maxPages}`
+          `Pages inspected: ${
+            inspectedPages.length
+          }/${site.maxPages}`
         );
+
         console.log(
           `Unvisited safe candidates available: ${unvisitedLinks.length}`
         );
 
-        if (candidateLinks.length === 0) {
+        if (
+          candidateLinks.length === 0
+        ) {
           outcome = {
             type: 'finished',
             summary:
@@ -192,7 +251,10 @@ async function main(): Promise<void> {
           console.log(
             '\nAgent exploration finished:'
           );
-          console.log(outcome.summary);
+
+          console.log(
+            outcome.summary
+          );
 
           break;
         }
@@ -205,15 +267,19 @@ async function main(): Promise<void> {
             candidateLinks
           );
 
-        if (decision.type === 'finish') {
+        if (
+          decision.type === 'finish'
+        ) {
           outcome = {
             type: 'finished',
-            summary: decision.summary
+            summary:
+              decision.summary
           };
 
           console.log(
             '\nAgent decision: FINISH'
           );
+
           console.log(
             `Summary: ${decision.summary}`
           );
@@ -224,12 +290,15 @@ async function main(): Promise<void> {
         console.log(
           '\nAgent selected a navigation target:'
         );
+
         console.log(
           `Text: ${decision.link.text}`
         );
+
         console.log(
           `URL: ${decision.link.url}`
         );
+
         console.log(
           `Reason: ${decision.reason}`
         );
@@ -254,39 +323,56 @@ async function main(): Promise<void> {
         );
 
         /*
-         * Some resource failures and console messages
-         * arrive shortly after the main document loads.
-         * Give the page a brief, bounded collection window.
+         * Some resource failures and console
+         * messages arrive shortly after the
+         * main document loads.
          */
-        await page.waitForTimeout(1_000);
+        await page.waitForTimeout(
+          1_000
+        );
 
         const diagnostics =
           diagnosticsCollector.snapshot();
 
         const classifiedDiagnostics =
-          classifyDiagnostics(diagnostics);
+          classifyDiagnostics(
+            diagnostics
+          );
 
         const actionableRequestCount =
-          classifiedDiagnostics.failedRequests.filter(
-            (item) =>
-              item.disposition === 'actionable'
-          ).length;
+          classifiedDiagnostics
+            .failedRequests
+            .filter(
+              (item) =>
+                item.disposition ===
+                'actionable'
+            )
+            .length;
 
         const ignoredNoiseCount =
-          classifiedDiagnostics.failedRequests.filter(
-            (item) =>
-              item.disposition === 'ignored-noise'
-          ).length;
+          classifiedDiagnostics
+            .failedRequests
+            .filter(
+              (item) =>
+                item.disposition ===
+                'ignored-noise'
+            )
+            .length;
 
         const needsReviewCount =
-          classifiedDiagnostics.failedRequests.filter(
-            (item) =>
-              item.disposition === 'needs-review'
-          ).length;
+          classifiedDiagnostics
+            .failedRequests
+            .filter(
+              (item) =>
+                item.disposition ===
+                'needs-review'
+            )
+            .length;
 
         console.log(
           '\nSelected page visited successfully:'
         );
+
         console.log(
           JSON.stringify(
             pageObservation,
@@ -298,9 +384,11 @@ async function main(): Promise<void> {
         console.log(
           '\nBrowser diagnostics collected:'
         );
+
         console.log(
           `Console errors: ${diagnostics.consoleErrors.length}`
         );
+
         console.log(
           `Failed network requests: ${diagnostics.failedRequests.length}`
         );
@@ -308,12 +396,15 @@ async function main(): Promise<void> {
         console.log(
           '\nDiagnostic classification:'
         );
+
         console.log(
           `Actionable failed requests: ${actionableRequestCount}`
         );
+
         console.log(
           `Needs review: ${needsReviewCount}`
         );
+
         console.log(
           `Ignored noise: ${ignoredNoiseCount}`
         );
@@ -323,7 +414,9 @@ async function main(): Promise<void> {
             pageObservation
           );
 
-        if (findings.length === 0) {
+        if (
+          findings.length === 0
+        ) {
           console.log(
             '\nDeterministic evaluation: no rule-based page health issues found.'
           );
@@ -342,20 +435,93 @@ async function main(): Promise<void> {
         }
 
         /*
-         * Capture visual evidence only when something
-         * potentially meaningful requires investigation.
-         *
-         * Ignored telemetry noise alone does not justify
-         * creating screenshot evidence.
+         * Extract a compact representation
+         * of visible, user-facing page content.
+         */
+        const pageContent =
+          await extractPageContent(
+            page
+          );
+
+        console.log(
+          '\nStructured page content extracted:'
+        );
+
+        console.log(
+          `Headings: ${pageContent.headings.length}`
+        );
+
+        console.log(
+          `Links: ${pageContent.links.length}`
+        );
+
+        console.log(
+          `Buttons: ${pageContent.buttons.length}`
+        );
+
+        console.log(
+          `Body text characters: ${pageContent.bodyText.length}`
+        );
+
+        /*
+         * Gemini now reviews the collected
+         * evidence for broader exploratory
+         * QA candidate issues.
+         */
+        const exploratoryQaAnalysis =
+          await analyzePageForQa({
+            observation:
+              pageObservation,
+
+            content:
+              pageContent,
+
+            classifiedDiagnostics,
+
+            ruleBasedFindings:
+              findings
+          });
+
+        console.log(
+          '\nExploratory QA analysis:'
+        );
+
+        console.log(
+          `Candidate findings: ${exploratoryQaAnalysis.findings.length}`
+        );
+
+        console.log(
+          `Summary: ${exploratoryQaAnalysis.summary}`
+        );
+
+        for (
+          const exploratoryFinding of
+          exploratoryQaAnalysis.findings
+        ) {
+          console.log(
+            `- [${exploratoryFinding.severity}/${exploratoryFinding.confidence}] ${exploratoryFinding.title}`
+          );
+        }
+
+        /*
+         * Screenshot evidence is captured
+         * whenever any deterministic,
+         * diagnostic, or exploratory signal
+         * deserves further investigation.
          */
         const shouldCaptureScreenshot =
           findings.length > 0 ||
           actionableRequestCount > 0 ||
-          needsReviewCount > 0;
+          needsReviewCount > 0 ||
+          exploratoryQaAnalysis
+            .findings.length > 0;
 
-        let screenshotPath: string | null = null;
+        let screenshotPath:
+          string | null = null;
 
-        if (shouldCaptureScreenshot) {
+        if (
+          shouldCaptureScreenshot
+        ) {
           const pageNumber =
             inspectedPages.length + 1;
 
@@ -372,6 +538,7 @@ async function main(): Promise<void> {
           console.log(
             '\nScreenshot evidence captured:'
           );
+
           console.log(
             screenshotPath
           );
@@ -383,14 +550,24 @@ async function main(): Promise<void> {
 
         inspectedPages.push({
           selection: {
-            link: decision.link,
-            reason: decision.reason
+            link:
+              decision.link,
+            reason:
+              decision.reason
           },
-          observation: pageObservation,
+
+          observation:
+            pageObservation,
+
           diagnostics,
+
           classifiedDiagnostics,
+
           screenshotPath,
-          findings
+
+          findings,
+
+          exploratoryQaAnalysis
         });
 
         const discoveredLinks =
@@ -408,12 +585,15 @@ async function main(): Promise<void> {
         console.log(
           `\nAdditional safe links discovered on this page: ${newlyAddedLinks}`
         );
+
         console.log(
           `Total unique safe links in pool: ${linkPool.size}`
         );
       }
 
-      if (outcome === null) {
+      if (
+        outcome === null
+      ) {
         if (
           inspectedPages.length >=
           site.maxPages
@@ -447,72 +627,113 @@ async function main(): Promise<void> {
             pageResult.findings
         );
 
+      const allExploratoryQaFindings =
+        inspectedPages.flatMap(
+          (pageResult) =>
+            pageResult
+              .exploratoryQaAnalysis
+              .findings
+        );
+
       const allClassifiedFailedRequests =
         inspectedPages.flatMap(
           (pageResult) =>
-            pageResult.classifiedDiagnostics.failedRequests
+            pageResult
+              .classifiedDiagnostics
+              .failedRequests
         );
 
       const actionableDiagnosticsCount =
         allClassifiedFailedRequests.filter(
           (item) =>
-            item.disposition === 'actionable'
+            item.disposition ===
+            'actionable'
         ).length;
 
       const diagnosticsNeedingReviewCount =
         allClassifiedFailedRequests.filter(
           (item) =>
-            item.disposition === 'needs-review'
+            item.disposition ===
+            'needs-review'
         ).length;
 
       const ignoredDiagnosticNoiseCount =
         allClassifiedFailedRequests.filter(
           (item) =>
-            item.disposition === 'ignored-noise'
+            item.disposition ===
+            'ignored-noise'
         ).length;
 
-      const report: SiteAgentReport = {
+      const report:
+        SiteAgentReport = {
         runId,
+
         startedAt:
           startedAt.toISOString(),
+
         finishedAt:
           new Date().toISOString(),
+
         site: {
           id: site.id,
           name: site.name,
-          startUrl: site.startUrl
+          startUrl:
+            site.startUrl
         },
+
         homepage:
           homepageObservation,
+
         outcome,
+
         inspectedPages,
+
         summary: {
           pagesInspected:
             inspectedPages.length,
+
           findingsCount:
             allFindings.length,
+
           highestSeverity:
             getHighestSeverity(
               allFindings
             ),
+
+          exploratoryQaFindingsCount:
+            allExploratoryQaFindings.length,
+
+          highestExploratoryQaSeverity:
+            getHighestExploratoryQaSeverity(
+              allExploratoryQaFindings
+            ),
+
           actionableDiagnosticsCount,
+
           diagnosticsNeedingReviewCount,
+
           ignoredDiagnosticNoiseCount
         }
       };
 
       const writtenJsonReport =
-        await writeJsonReport(report);
+        await writeJsonReport(
+          report
+        );
 
       const writtenMarkdownReport =
-        await writeMarkdownReport(report);
+        await writeMarkdownReport(
+          report
+        );
 
       console.log(
         '\nExploration outcome:'
       );
+
       console.log(
         `Type: ${outcome.type}`
       );
+
       console.log(
         `Summary: ${outcome.summary}`
       );
@@ -536,11 +757,13 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(
-    'Site agent run failed:',
-    error
-  );
+main().catch(
+  (error: unknown) => {
+    console.error(
+      'Site agent run failed:',
+      error
+    );
 
-  process.exitCode = 1;
-});
+    process.exitCode = 1;
+  }
+);

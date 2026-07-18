@@ -7,8 +7,12 @@ export interface WrittenMarkdownReport {
   filePath: string;
 }
 
-function formatStatus(status: number | null): string {
-  return status === null ? 'Unknown' : String(status);
+function formatStatus(
+  status: number | null
+): string {
+  return status === null
+    ? 'Unknown'
+    : String(status);
 }
 
 export async function writeMarkdownReport(
@@ -36,7 +40,9 @@ export async function writeMarkdownReport(
     '',
     `- Pages inspected: ${report.summary.pagesInspected}`,
     `- Rule-based findings: ${report.summary.findingsCount}`,
-    `- Highest finding severity: ${report.summary.highestSeverity}`,
+    `- Highest rule-based finding severity: ${report.summary.highestSeverity}`,
+    `- Exploratory QA candidate findings: ${report.summary.exploratoryQaFindingsCount}`,
+    `- Highest exploratory QA severity: ${report.summary.highestExploratoryQaSeverity}`,
     `- Actionable diagnostics: ${report.summary.actionableDiagnosticsCount}`,
     `- Diagnostics needing review: ${report.summary.diagnosticsNeedingReviewCount}`,
     `- Ignored diagnostic noise: ${report.summary.ignoredDiagnosticNoiseCount}`,
@@ -52,7 +58,9 @@ export async function writeMarkdownReport(
     ''
   ];
 
-  if (report.inspectedPages.length === 0) {
+  if (
+    report.inspectedPages.length === 0
+  ) {
     lines.push(
       '## Inspected Pages',
       '',
@@ -61,212 +69,301 @@ export async function writeMarkdownReport(
     );
   }
 
-  report.inspectedPages.forEach((pageResult, index) => {
-    const pageNumber = index + 1;
+  report.inspectedPages.forEach(
+    (pageResult, index) => {
+      const pageNumber =
+        index + 1;
 
-    const {
-      selection,
-      observation,
-      diagnostics,
-      classifiedDiagnostics,
-      screenshotPath,
-      findings
-    } = pageResult;
+      const {
+        selection,
+        observation,
+        diagnostics,
+        classifiedDiagnostics,
+        screenshotPath,
+        findings,
+        exploratoryQaAnalysis
+      } = pageResult;
 
-    const actionableCount =
-      classifiedDiagnostics.failedRequests.filter(
-        (item) =>
-          item.disposition === 'actionable'
-      ).length;
+      const actionableCount =
+        classifiedDiagnostics
+          .failedRequests
+          .filter(
+            (item) =>
+              item.disposition ===
+              'actionable'
+          )
+          .length;
 
-    const needsReviewCount =
-      classifiedDiagnostics.failedRequests.filter(
-        (item) =>
-          item.disposition === 'needs-review'
-      ).length;
+      const needsReviewCount =
+        classifiedDiagnostics
+          .failedRequests
+          .filter(
+            (item) =>
+              item.disposition ===
+              'needs-review'
+          )
+          .length;
 
-    const ignoredNoiseCount =
-      classifiedDiagnostics.failedRequests.filter(
-        (item) =>
-          item.disposition === 'ignored-noise'
-      ).length;
+      const ignoredNoiseCount =
+        classifiedDiagnostics
+          .failedRequests
+          .filter(
+            (item) =>
+              item.disposition ===
+              'ignored-noise'
+          )
+          .length;
 
-    lines.push(
-      `## Inspected Page ${pageNumber}`,
-      '',
-      '### Agent Selection',
-      '',
-      `- Link text: ${selection.link.text}`,
-      `- Selected URL: ${selection.link.url}`,
-      `- Reason: ${selection.reason}`,
-      '',
-      '### Page Observation',
-      '',
-      `- Requested URL: ${observation.requestedUrl}`,
-      `- Final URL: ${observation.finalUrl}`,
-      `- HTTP status: ${formatStatus(observation.httpStatus)}`,
-      `- Title: ${observation.title || '(empty)'}`,
-      '',
-      '### Headings',
-      ''
-    );
-
-    if (observation.headings.length === 0) {
       lines.push(
-        'No H1 or H2 headings were found.',
+        `## Inspected Page ${pageNumber}`,
+        '',
+        '### Agent Selection',
+        '',
+        `- Link text: ${selection.link.text}`,
+        `- Selected URL: ${selection.link.url}`,
+        `- Reason: ${selection.reason}`,
+        '',
+        '### Page Observation',
+        '',
+        `- Requested URL: ${observation.requestedUrl}`,
+        `- Final URL: ${observation.finalUrl}`,
+        `- HTTP status: ${formatStatus(observation.httpStatus)}`,
+        `- Title: ${observation.title || '(empty)'}`,
+        '',
+        '### Headings',
         ''
       );
-    } else {
-      observation.headings.forEach((heading) => {
-        lines.push(`- ${heading}`);
-      });
 
-      lines.push('');
-    }
-
-    lines.push(
-      '### Browser Diagnostics',
-      '',
-      `- Console errors: ${diagnostics.consoleErrors.length}`,
-      `- Failed network requests: ${diagnostics.failedRequests.length}`,
-      '',
-      '### Diagnostic Classification',
-      '',
-      `- Actionable failed requests: ${actionableCount}`,
-      `- Needs review: ${needsReviewCount}`,
-      `- Ignored noise: ${ignoredNoiseCount}`,
-      '',
-      '### Screenshot Evidence',
-      ''
-    );
-
-    if (screenshotPath === null) {
-      lines.push(
-        'No screenshot was captured because no finding or review-worthy diagnostic triggered evidence collection.',
-        ''
-      );
-    } else {
-      lines.push(
-        `- Screenshot path: ${screenshotPath}`,
-        ''
-      );
-    }
-
-    lines.push(
-      '#### Console Errors',
-      ''
-    );
-
-    if (diagnostics.consoleErrors.length === 0) {
-      lines.push(
-        'No browser console errors were recorded.',
-        ''
-      );
-    } else {
-      diagnostics.consoleErrors.forEach(
-        (consoleError, errorIndex) => {
-          lines.push(
-            `**Console error ${errorIndex + 1}**`,
-            '',
-            `- Message: ${consoleError.text}`,
-            `- Source URL: ${consoleError.sourceUrl ?? 'Unknown'}`,
-            `- Line: ${consoleError.lineNumber ?? 'Unknown'}`,
-            `- Column: ${consoleError.columnNumber ?? 'Unknown'}`,
-            ''
-          );
-        }
-      );
-    }
-
-    lines.push(
-      '#### Classified Failed Network Requests',
-      ''
-    );
-
-    if (
-      classifiedDiagnostics.failedRequests.length === 0
-    ) {
-      lines.push(
-        'No failed network requests were recorded.',
-        ''
-      );
-    } else {
-      classifiedDiagnostics.failedRequests.forEach(
-        (classifiedRequest, requestIndex) => {
-          const {
-            request,
-            disposition,
-            reason
-          } = classifiedRequest;
-
-          lines.push(
-            `**Failed request ${requestIndex + 1}**`,
-            '',
-            `- Disposition: ${disposition}`,
-            `- Reason: ${reason}`,
-            `- URL: ${request.url}`,
-            `- Method: ${request.method}`,
-            `- Resource type: ${request.resourceType}`,
-            `- Failure: ${request.failureText}`,
-            ''
-          );
-        }
-      );
-    }
-
-    lines.push(
-      '#### Raw Failed Network Requests',
-      ''
-    );
-
-    if (diagnostics.failedRequests.length === 0) {
-      lines.push(
-        'No failed network requests were recorded.',
-        ''
-      );
-    } else {
-      diagnostics.failedRequests.forEach(
-        (failedRequest, requestIndex) => {
-          lines.push(
-            `**Raw failed request ${requestIndex + 1}**`,
-            '',
-            `- URL: ${failedRequest.url}`,
-            `- Method: ${failedRequest.method}`,
-            `- Resource type: ${failedRequest.resourceType}`,
-            `- Failure: ${failedRequest.failureText}`,
-            ''
-          );
-        }
-      );
-    }
-
-    lines.push(
-      '### Rule-Based Findings',
-      ''
-    );
-
-    if (findings.length === 0) {
-      lines.push(
-        'No rule-based page health issues were detected.',
-        ''
-      );
-    } else {
-      findings.forEach((finding) => {
+      if (
+        observation.headings.length ===
+        0
+      ) {
         lines.push(
-          `#### ${finding.severity.toUpperCase()} — ${finding.title}`,
-          '',
-          `- Code: ${finding.code}`,
-          `- URL: ${finding.url}`,
-          `- Evidence: ${finding.evidence}`,
+          'No H1 or H2 headings were found.',
           ''
         );
-      });
-    }
-  });
+      } else {
+        observation.headings.forEach(
+          (heading) => {
+            lines.push(
+              `- ${heading}`
+            );
+          }
+        );
 
-  await mkdir(directoryPath, {
-    recursive: true
-  });
+        lines.push('');
+      }
+
+      lines.push(
+        '### Browser Diagnostics',
+        '',
+        `- Console errors: ${diagnostics.consoleErrors.length}`,
+        `- Failed network requests: ${diagnostics.failedRequests.length}`,
+        '',
+        '### Diagnostic Classification',
+        '',
+        `- Actionable failed requests: ${actionableCount}`,
+        `- Needs review: ${needsReviewCount}`,
+        `- Ignored noise: ${ignoredNoiseCount}`,
+        '',
+        '### Screenshot Evidence',
+        ''
+      );
+
+      if (
+        screenshotPath === null
+      ) {
+        lines.push(
+          'No screenshot was captured because no finding or review-worthy diagnostic triggered evidence collection.',
+          ''
+        );
+      } else {
+        lines.push(
+          `- Screenshot path: ${screenshotPath}`,
+          ''
+        );
+      }
+
+      lines.push(
+        '#### Console Errors',
+        ''
+      );
+
+      if (
+        diagnostics.consoleErrors
+          .length === 0
+      ) {
+        lines.push(
+          'No browser console errors were recorded.',
+          ''
+        );
+      } else {
+        diagnostics.consoleErrors.forEach(
+          (
+            consoleError,
+            errorIndex
+          ) => {
+            lines.push(
+              `**Console error ${errorIndex + 1}**`,
+              '',
+              `- Message: ${consoleError.text}`,
+              `- Source URL: ${consoleError.sourceUrl ?? 'Unknown'}`,
+              `- Line: ${consoleError.lineNumber ?? 'Unknown'}`,
+              `- Column: ${consoleError.columnNumber ?? 'Unknown'}`,
+              ''
+            );
+          }
+        );
+      }
+
+      lines.push(
+        '#### Classified Failed Network Requests',
+        ''
+      );
+
+      if (
+        classifiedDiagnostics
+          .failedRequests.length === 0
+      ) {
+        lines.push(
+          'No failed network requests were recorded.',
+          ''
+        );
+      } else {
+        classifiedDiagnostics
+          .failedRequests
+          .forEach(
+            (
+              classifiedRequest,
+              requestIndex
+            ) => {
+              const {
+                request,
+                disposition,
+                reason
+              } =
+                classifiedRequest;
+
+              lines.push(
+                `**Failed request ${requestIndex + 1}**`,
+                '',
+                `- Disposition: ${disposition}`,
+                `- Reason: ${reason}`,
+                `- URL: ${request.url}`,
+                `- Method: ${request.method}`,
+                `- Resource type: ${request.resourceType}`,
+                `- Failure: ${request.failureText}`,
+                ''
+              );
+            }
+          );
+      }
+
+      lines.push(
+        '#### Raw Failed Network Requests',
+        ''
+      );
+
+      if (
+        diagnostics.failedRequests
+          .length === 0
+      ) {
+        lines.push(
+          'No failed network requests were recorded.',
+          ''
+        );
+      } else {
+        diagnostics.failedRequests.forEach(
+          (
+            failedRequest,
+            requestIndex
+          ) => {
+            lines.push(
+              `**Raw failed request ${requestIndex + 1}**`,
+              '',
+              `- URL: ${failedRequest.url}`,
+              `- Method: ${failedRequest.method}`,
+              `- Resource type: ${failedRequest.resourceType}`,
+              `- Failure: ${failedRequest.failureText}`,
+              ''
+            );
+          }
+        );
+      }
+
+      lines.push(
+        '### Rule-Based Findings',
+        ''
+      );
+
+      if (
+        findings.length === 0
+      ) {
+        lines.push(
+          'No rule-based page health issues were detected.',
+          ''
+        );
+      } else {
+        findings.forEach(
+          (finding) => {
+            lines.push(
+              `#### ${finding.severity.toUpperCase()} — ${finding.title}`,
+              '',
+              `- Code: ${finding.code}`,
+              `- URL: ${finding.url}`,
+              `- Evidence: ${finding.evidence}`,
+              ''
+            );
+          }
+        );
+      }
+
+      lines.push(
+        '### Exploratory QA Analysis',
+        '',
+        `**Summary:** ${exploratoryQaAnalysis.summary}`,
+        ''
+      );
+
+      if (
+        exploratoryQaAnalysis
+          .findings.length === 0
+      ) {
+        lines.push(
+          'No evidence-grounded exploratory QA candidate issues were identified.',
+          ''
+        );
+      } else {
+        exploratoryQaAnalysis
+          .findings
+          .forEach(
+            (
+              finding,
+              findingIndex
+            ) => {
+              lines.push(
+                `#### Candidate ${findingIndex + 1}: ${finding.severity.toUpperCase()} — ${finding.title}`,
+                '',
+                `- Category: ${finding.category}`,
+                `- Severity: ${finding.severity}`,
+                `- Confidence: ${finding.confidence}`,
+                `- Evidence: ${finding.evidence}`,
+                `- Reasoning: ${finding.reasoning}`,
+                `- Suggested check: ${finding.suggestedCheck}`,
+                ''
+              );
+            }
+          );
+      }
+    }
+  );
+
+  await mkdir(
+    directoryPath,
+    {
+      recursive: true
+    }
+  );
 
   await writeFile(
     filePath,
