@@ -1,11 +1,5 @@
 import type { Page } from '@playwright/test';
 
-const MAX_BODY_TEXT_LENGTH = 15_000;
-const MAX_LINKS = 50;
-const MAX_BUTTONS = 30;
-const MAX_SELECTS = 20;
-const MAX_OPTIONS_PER_SELECT = 250;
-
 export interface PageContentLink {
   text: string;
   url: string;
@@ -21,7 +15,36 @@ export interface PageSelectControl {
   label: string | null;
   name: string | null;
   id: string | null;
+  required: boolean;
+  disabled: boolean;
   options: PageSelectOption[];
+}
+
+export interface PageTextFieldControl {
+  tagName: 'input' | 'textarea';
+  inputType: string;
+  label: string | null;
+  name: string | null;
+  id: string | null;
+  placeholder: string | null;
+  required: boolean;
+  disabled: boolean;
+  readOnly: boolean;
+
+  /**
+   * Current local field value.
+   *
+   * Password values are never exposed to the reasoning layer.
+   */
+  value: string | null;
+
+  /**
+   * Browser-native validation state that can be inspected without
+   * submitting the form.
+   */
+  valid: boolean;
+  validationMessage: string | null;
+  ariaInvalid: string | null;
 }
 
 export interface ExtractedPageContent {
@@ -30,229 +53,475 @@ export interface ExtractedPageContent {
   bodyText: string;
   links: PageContentLink[];
   buttons: string[];
+  textFields: PageTextFieldControl[];
   selects: PageSelectControl[];
-}
-
-function normalizeText(
-  text: string
-): string {
-  return text
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 export async function extractPageContent(
   page: Page
 ): Promise<ExtractedPageContent> {
-  const title = await page.title();
+  return page.evaluate(() => {
+    /*
+     * Keep browser-side logic self-contained.
+     *
+     * In particular, avoid declaring reusable helper functions inside
+     * page.evaluate(). Some TypeScript runtime transpilers may decorate
+     * those functions with Node-side helpers that do not exist in the
+     * browser execution context.
+     */
 
-  const headings = await page
-    .locator('h1, h2, h3')
-    .allTextContents();
+    const title = document.title
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  const normalizedHeadings = headings
-    .map(normalizeText)
-    .filter(Boolean);
-
-  const bodyText = await page
-    .locator('body')
-    .innerText();
-
-  const normalizedBodyText =
-    normalizeText(bodyText).slice(
-      0,
-      MAX_BODY_TEXT_LENGTH
-    );
-
-  const links = await page
-    .locator('a[href]')
-    .evaluateAll(
-      (
-        elements,
-        maxLinks
-      ) => {
-        return elements
-          .filter((element) => {
-            const htmlElement =
-              element as HTMLElement;
-
-            return (
-              htmlElement.offsetWidth > 0 &&
-              htmlElement.offsetHeight > 0
-            );
-          })
-          .slice(0, maxLinks)
-          .map((element) => {
-            const anchor =
-              element as HTMLAnchorElement;
-
-            return {
-              text:
-                anchor.innerText
-                  .replace(/\s+/g, ' ')
-                  .trim(),
-              url: anchor.href
-            };
-          });
-      },
-      MAX_LINKS
-    );
-
-  const buttons = await page
-    .locator(
-      'button, [role="button"], input[type="button"], input[type="submit"]'
+    const headings = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'h1, h2, h3'
+      )
     )
-    .evaluateAll(
+      .filter(element => {
+        const style =
+          window.getComputedStyle(element);
+
+        const rectangle =
+          element.getBoundingClientRect();
+
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rectangle.width > 0 &&
+          rectangle.height > 0
+        );
+      })
+      .map(heading =>
+        heading.innerText
+          .replace(/\s+/g, ' ')
+          .trim()
+      )
+      .filter(text => text.length > 0);
+
+    const bodyText =
       (
-        elements,
-        maxButtons
-      ) => {
-        return elements
-          .filter((element) => {
-            const htmlElement =
-              element as HTMLElement;
+        document.body?.innerText ?? ''
+      )
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 15_000);
 
-            return (
-              htmlElement.offsetWidth > 0 &&
-              htmlElement.offsetHeight > 0
-            );
-          })
-          .slice(0, maxButtons)
-          .map((element) => {
-            if (
-              element instanceof HTMLInputElement
-            ) {
-              return element.value
+    const links = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>(
+        'a[href]'
+      )
+    )
+      .filter(element => {
+        const style =
+          window.getComputedStyle(element);
+
+        const rectangle =
+          element.getBoundingClientRect();
+
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rectangle.width > 0 &&
+          rectangle.height > 0
+        );
+      })
+      .map(link => {
+        const visibleText =
+          link.innerText
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const ariaLabel =
+          (
+            link.getAttribute(
+              'aria-label'
+            ) ?? ''
+          )
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        return {
+          text:
+            visibleText.length > 0
+              ? visibleText
+              : ariaLabel,
+          url: link.href
+        };
+      })
+      .filter(
+        link =>
+          link.text.length > 0 &&
+          link.url.length > 0
+      )
+      .slice(0, 50);
+
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(
+        'button'
+      )
+    )
+      .filter(element => {
+        const style =
+          window.getComputedStyle(element);
+
+        const rectangle =
+          element.getBoundingClientRect();
+
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rectangle.width > 0 &&
+          rectangle.height > 0
+        );
+      })
+      .map(button => {
+        const visibleText =
+          button.innerText
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const ariaLabel =
+          (
+            button.getAttribute(
+              'aria-label'
+            ) ?? ''
+          )
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        return visibleText.length > 0
+          ? visibleText
+          : ariaLabel;
+      })
+      .filter(text => text.length > 0)
+      .slice(0, 30);
+
+    const approvedInputTypes = new Set([
+      'text',
+      'email',
+      'search',
+      'tel',
+      'url',
+      'password',
+      'number'
+    ]);
+
+    const textFields = Array.from(
+      document.querySelectorAll<
+        HTMLInputElement | HTMLTextAreaElement
+      >('input, textarea')
+    )
+      .filter(element => {
+        const style =
+          window.getComputedStyle(element);
+
+        const rectangle =
+          element.getBoundingClientRect();
+
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rectangle.width > 0 &&
+          rectangle.height > 0
+        );
+      })
+      .filter(element => {
+        if (
+          element instanceof
+          HTMLTextAreaElement
+        ) {
+          return true;
+        }
+
+        return approvedInputTypes.has(
+          element.type.toLowerCase()
+        );
+      })
+      .map(element => {
+        let label: string | null = null;
+
+        if (
+          element.labels !== null &&
+          element.labels.length > 0
+        ) {
+          const labelText = Array.from(
+            element.labels
+          )
+            .map(labelElement =>
+              (
+                labelElement.innerText ||
+                labelElement.textContent ||
+                ''
+              )
                 .replace(/\s+/g, ' ')
-                .trim();
-            }
+                .trim()
+            )
+            .filter(
+              value =>
+                value.length > 0
+            )
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
 
-            return (
-              element.textContent ?? ''
+          if (labelText.length > 0) {
+            label = labelText;
+          }
+        }
+
+        if (label === null) {
+          const ariaLabel =
+            (
+              element.getAttribute(
+                'aria-label'
+              ) ?? ''
             )
               .replace(/\s+/g, ' ')
               .trim();
-          })
-          .filter(Boolean);
-      },
-      MAX_BUTTONS
-    );
 
-  const selects = await page
-    .locator('select')
-    .evaluateAll(
-      (
-        elements,
-        limits
-      ) => {
-        return elements
-          .slice(
-            0,
-            limits.maxSelects
+          if (ariaLabel.length > 0) {
+            label = ariaLabel;
+          }
+        }
+
+        const name =
+          (
+            element.getAttribute(
+              'name'
+            ) ?? ''
           )
-          .map((element) => {
-            const select =
-              element as HTMLSelectElement;
+            .replace(/\s+/g, ' ')
+            .trim();
 
-            let label: string | null =
-              null;
+        const id =
+          (
+            element.getAttribute(
+              'id'
+            ) ?? ''
+          )
+            .replace(/\s+/g, ' ')
+            .trim();
 
-            /*
-             * First try the native labels collection.
-             * This covers:
-             *
-             * <label for="country">Country</label>
-             * <select id="country">...</select>
-             *
-             * and:
-             *
-             * <label>
-             *   Country
-             *   <select>...</select>
-             * </label>
-             */
-            if (
-              select.labels &&
-              select.labels.length > 0
-            ) {
-              label =
-                select.labels[0]
-                  .textContent
-                  ?.replace(/\s+/g, ' ')
-                  .trim() || null;
-            }
+        const placeholder =
+          (
+            element.getAttribute(
+              'placeholder'
+            ) ?? ''
+          )
+            .replace(/\s+/g, ' ')
+            .trim();
 
-            /*
-             * Fall back to aria-label when no
-             * native HTML label is available.
-             */
-            if (!label) {
-              label =
-                select
-                  .getAttribute(
-                    'aria-label'
-                  )
-                  ?.replace(/\s+/g, ' ')
-                  .trim() || null;
-            }
+        const validationMessage =
+          element.validationMessage
+            .replace(/\s+/g, ' ')
+            .trim();
 
-            const options =
-              Array.from(
-                select.options
+        const ariaInvalid =
+          (
+            element.getAttribute(
+              'aria-invalid'
+            ) ?? ''
+          )
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const isPassword =
+          element instanceof
+            HTMLInputElement &&
+          element.type.toLowerCase() ===
+            'password';
+
+        return {
+          tagName:
+            element instanceof
+            HTMLTextAreaElement
+              ? ('textarea' as const)
+              : ('input' as const),
+
+          inputType:
+            element instanceof
+            HTMLTextAreaElement
+              ? 'textarea'
+              : element.type.toLowerCase(),
+
+          label,
+
+          name:
+            name.length > 0
+              ? name
+              : null,
+
+          id:
+            id.length > 0
+              ? id
+              : null,
+
+          placeholder:
+            placeholder.length > 0
+              ? placeholder
+              : null,
+
+          required: element.required,
+          disabled: element.disabled,
+          readOnly: element.readOnly,
+
+          value: isPassword
+            ? null
+            : element.value.slice(
+                0,
+                500
+              ),
+
+          valid:
+            element.validity.valid,
+
+          validationMessage:
+            validationMessage.length > 0
+              ? validationMessage
+              : null,
+
+          ariaInvalid:
+            ariaInvalid.length > 0
+              ? ariaInvalid
+              : null
+        };
+      })
+      .slice(0, 30);
+
+    const selects = Array.from(
+      document.querySelectorAll<HTMLSelectElement>(
+        'select'
+      )
+    )
+      .filter(element => {
+        const style =
+          window.getComputedStyle(element);
+
+        const rectangle =
+          element.getBoundingClientRect();
+
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rectangle.width > 0 &&
+          rectangle.height > 0
+        );
+      })
+      .map(select => {
+        let label: string | null = null;
+
+        if (
+          select.labels !== null &&
+          select.labels.length > 0
+        ) {
+          const labelText = Array.from(
+            select.labels
+          )
+            .map(labelElement =>
+              (
+                labelElement.innerText ||
+                labelElement.textContent ||
+                ''
               )
-                .slice(
-                  0,
-                  limits.maxOptionsPerSelect
+                .replace(/\s+/g, ' ')
+                .trim()
+            )
+            .filter(
+              value =>
+                value.length > 0
+            )
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          if (labelText.length > 0) {
+            label = labelText;
+          }
+        }
+
+        if (label === null) {
+          const ariaLabel =
+            (
+              select.getAttribute(
+                'aria-label'
+              ) ?? ''
+            )
+              .replace(/\s+/g, ' ')
+              .trim();
+
+          if (ariaLabel.length > 0) {
+            label = ariaLabel;
+          }
+        }
+
+        const name =
+          (
+            select.getAttribute(
+              'name'
+            ) ?? ''
+          )
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const id =
+          (
+            select.getAttribute(
+              'id'
+            ) ?? ''
+          )
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        return {
+          label,
+
+          name:
+            name.length > 0
+              ? name
+              : null,
+
+          id:
+            id.length > 0
+              ? id
+              : null,
+
+          required: select.required,
+          disabled: select.disabled,
+
+          options: Array.from(
+            select.options
+          )
+            .map(option => ({
+              text:
+                (
+                  option.textContent ??
+                  ''
                 )
-                .map((option) => {
-                  return {
-                    text:
-                      option.text
-                        .replace(
-                          /\s+/g,
-                          ' '
-                        )
-                        .trim(),
-                    value:
-                      option.value,
-                    selected:
-                      option.selected
-                  };
-                });
+                  .replace(
+                    /\s+/g,
+                    ' '
+                  )
+                  .trim(),
 
-            return {
-              label,
-              name:
-                select.name ||
-                null,
-              id:
-                select.id ||
-                null,
-              options
-            };
-          });
-      },
-      {
-        maxSelects:
-          MAX_SELECTS,
-        maxOptionsPerSelect:
-          MAX_OPTIONS_PER_SELECT
-      }
-    );
+              value: option.value,
+              selected:
+                option.selected
+            }))
+            .slice(0, 250)
+        };
+      })
+      .slice(0, 20);
 
-  return {
-    title,
-    headings:
-      normalizedHeadings,
-    bodyText:
-      normalizedBodyText,
-    links:
-      links.filter(
-        (link) =>
-          link.text.length > 0 &&
-          link.url.length > 0
-      ),
-    buttons,
-    selects
-  };
+    return {
+      title,
+      headings,
+      bodyText,
+      links,
+      buttons,
+      textFields,
+      selects
+    };
+  });
 }
