@@ -1,12 +1,12 @@
 # Web QA Agent
 
-An experimental AI-assisted web QA agent built with **TypeScript, Playwright, and Gemini** for safe website exploration, evidence collection, exploratory QA reasoning, and structured issue reporting.
+An experimental AI-assisted web QA agent built with **TypeScript, Playwright, and Gemini** for safe website exploration, evidence collection, exploratory QA reasoning, controlled browser interaction, and structured issue reporting.
 
 The project explores a simple idea:
 
-> **AI can reason creatively about what might be wrong, while browser execution, permissions, and safety boundaries remain deterministic.**
+> **AI can reason creatively about what might be worth testing, while browser execution, permissions, and safety boundaries remain deterministic.**
 
-Rather than relying only on predefined automated test cases, the agent is being designed to independently inspect websites, identify potentially meaningful QA concerns, gather supporting evidence, and present reviewable findings.
+Rather than relying only on predefined automated test cases, the agent is being designed to independently inspect websites, identify potentially meaningful QA concerns, gather supporting evidence, request safe exploratory actions, and present reviewable findings.
 
 ---
 
@@ -47,6 +47,15 @@ The agent currently supports:
 - Generating machine-readable evidence targets for supported UI elements.
 - Capturing full-page screenshots when needed.
 - Capturing focused evidence for supported UI findings.
+- Defining a constrained, Zod-validated vocabulary of exploratory browser actions.
+- Deterministically executing approved Playwright interactions including:
+  - filling text fields
+  - clearing text fields
+  - blurring form controls
+  - selecting options from native dropdowns
+  - bounded scrolling
+  - explicitly stopping exploration
+- Rejecting unsupported or ambiguous browser interactions rather than guessing.
 - Generating both JSON and human-readable Markdown reports.
 
 The project is intended to evolve into a reusable constrained autonomous exploratory testing agent rather than a collection of site-specific automated tests.
@@ -115,6 +124,9 @@ The project separates generic agent infrastructure from site-specific configurat
 
 ```text
 agent/
+├── actions/
+│   └── validated exploratory action schemas and safety contracts
+│
 ├── ai/
 │   └── Gemini request handling, retries, and timeouts
 │
@@ -128,6 +140,7 @@ agent/
 ├── browser/
 │   ├── navigation inspection
 │   ├── safe page visits
+│   ├── deterministic approved-action execution
 │   ├── browser diagnostic collection
 │   ├── structured page-content extraction
 │   ├── full-page screenshot capture
@@ -189,13 +202,13 @@ The project currently uses:
 - **Zod**
 - **GitHub Actions**
 
-TypeScript is used throughout the agent architecture for typed site configuration, browser observations, diagnostic evidence, AI response schemas, report models, and machine-readable evidence targets.
+TypeScript is used throughout the agent architecture for typed site configuration, browser observations, diagnostic evidence, AI response schemas, action contracts, report models, and machine-readable evidence targets.
 
 Playwright handles deterministic browser execution.
 
 Gemini is used for reasoning tasks where rigid predefined rules are less useful.
 
-Zod validates AI-generated structured responses before they are accepted by the agent.
+Zod validates both AI-generated structured findings and the constrained browser-action vocabulary before those structures are accepted by the agent.
 
 ---
 
@@ -215,6 +228,8 @@ Current boundaries include:
 - Previously visited URLs are tracked.
 - Form submission is disabled.
 - Potentially destructive actions are not exposed to the AI.
+- Arbitrary CSS selectors are not accepted from the AI.
+- Unsupported or ambiguous element targets are rejected rather than guessed.
 
 Examples of intended safe actions:
 
@@ -222,19 +237,22 @@ Examples of intended safe actions:
 Open page                 ✓
 Follow approved link      ✓
 Scroll                    ✓
-Open accordion            ✓
-Switch tabs               ✓
-Open dropdown             ✓
-Select a local option     ✓
-Fill a field locally      ✓
-Clear a field             ✓
-Trigger client validation ✓
+Open accordion            planned
+Switch tabs               planned
+Open dropdown             planned
+Select a native option    ✓
+Fill a text field         ✓
+Clear a text field        ✓
+Blur a field              ✓
+Trigger client validation partially supported through safe field interaction
 
 Submit contact form       ✗
 Create account            ✗
 Make purchase             ✗
 Delete or modify data     ✗
 Trigger destructive API   ✗
+Execute arbitrary JS      ✗
+Provide arbitrary selector✗
 ```
 
 ### AI reasoning
@@ -254,6 +272,101 @@ AI findings are treated as **candidate issues**, not automatically confirmed def
 Every finding must be grounded in supplied evidence.
 
 Returning zero findings is explicitly considered a valid result.
+
+---
+
+## Safe Exploratory Action Boundary
+
+The first deterministic foundation of the planner/action architecture is now implemented.
+
+The exploratory planner will be allowed to request only actions matching a constrained schema.
+
+The currently implemented action vocabulary is:
+
+```text
+fill-text-field
+clear-field
+blur-field
+select-option
+scroll
+stop
+```
+
+For example, a planner may eventually request:
+
+```json
+{
+  "kind": "fill-text-field",
+  "target": {
+    "label": "Email",
+    "name": "email",
+    "id": null,
+    "placeholder": "Enter your email"
+  },
+  "value": "not-an-email"
+}
+```
+
+The AI cannot instead return arbitrary Playwright code such as:
+
+```javascript
+page.locator('#whatever').click();
+```
+
+Nor can it invent unsupported actions such as:
+
+```json
+{
+  "kind": "submit-form"
+}
+```
+
+The action schema is validated with Zod before execution.
+
+The deterministic Playwright executor then independently:
+
+1. resolves the target using approved DOM attributes;
+2. rejects ambiguous matches;
+3. verifies that the element type supports the requested action;
+4. verifies any requested option or value constraints that can be checked deterministically;
+5. performs the approved Playwright operation.
+
+For example:
+
+```text
+Gemini planner
+      │
+      │ requests:
+      │ fill Email with "not-an-email"
+      ▼
+Zod action schema
+      │
+      │ validates approved vocabulary
+      ▼
+Deterministic executor
+      │
+      │ resolves target
+      │ verifies input type
+      │ rejects ambiguity
+      ▼
+Playwright
+      │
+      ▼
+Browser
+```
+
+Current executor safety behavior includes:
+
+- text-entry actions reject unsupported controls such as checkboxes;
+- native dropdown selection rejects nonexistent options;
+- field lookup rejects ambiguous targets rather than choosing one arbitrarily;
+- AI-provided CSS selectors are not supported;
+- text-entry actions are limited to approved input types and textareas;
+- `stop` explicitly ends an exploratory sequence without performing a browser action.
+
+The action vocabulary and executor are implemented and independently tested.
+
+They are **not yet connected to an autonomous Gemini planner loop**.
 
 ---
 
@@ -289,9 +402,21 @@ Continue until exploration limit
 Generate JSON + Markdown reports
 ```
 
-The current exploration loop is primarily **observe-and-analyze**.
+The current main exploration loop is still primarily **observe-and-analyze**.
 
-The next major phase is adding a planner/action loop so the agent can safely interact with page elements, observe resulting behavior, and decide what to test next.
+Separately, the project now contains the deterministic action vocabulary and Playwright executor required for active exploratory interaction.
+
+The next step is connecting those pieces through an AI planner that can safely decide:
+
+```text
+What should I test next?
+        ↓
+Which approved action would test that hypothesis?
+        ↓
+What changed after the action?
+        ↓
+What should I do next?
+```
 
 ---
 
@@ -576,7 +701,7 @@ The long-term goal is to make adding another ordinary public website close to a 
 
 The project is not intended to guarantee compatibility with every website on the internet.
 
-Sites involving complex authentication, CAPTCHAs, aggressive anti-bot systems, unusual iframe structures, or highly custom UI components may require additional adapters.
+Sites involving complex authentication, CAPTCHAs, aggressive anti-bot systems, unusual iframe structures, Shadow DOM, or highly custom UI components may require additional adapters.
 
 ---
 
@@ -670,9 +795,37 @@ screenshot capture
 screenshot-trigger behavior
 targeted UI evidence capture
 real-site exploratory integration
+safe exploratory action schema validation
+deterministic exploratory action execution
 ```
 
-These small checks allow components to be validated independently before being integrated into the main autonomous workflow.
+The action safety checks can be run directly with:
+
+```bash
+npm run agent:action-schema-check
+npm run agent:action-executor-check
+```
+
+The schema check verifies that:
+
+- approved actions are accepted;
+- unknown actions are rejected;
+- malformed control targets are rejected;
+- excessive scrolling is rejected;
+- arbitrary selector-style targets are rejected.
+
+The executor check uses a synthetic local browser page to verify that:
+
+- approved text fields can be filled;
+- fields can be blurred;
+- fields can be cleared;
+- valid native dropdown options can be selected;
+- bounded scrolling works;
+- exploration can explicitly stop;
+- checkboxes cannot be treated as text-entry controls;
+- nonexistent dropdown options are rejected.
+
+These focused checks allow components to be validated independently before being integrated into the main autonomous workflow.
 
 ---
 
@@ -717,10 +870,13 @@ The agent does **not yet** perform unrestricted autonomous exploratory testing.
 Current limitations include:
 
 - The main agent currently focuses more on observation than active interaction.
-- A general planner/action loop is not yet implemented.
-- Generic text-field boundary testing is not yet implemented.
-- Client-side validation exploration is not yet integrated into autonomous runs.
+- A general Gemini-driven planner/action loop is not yet implemented.
+- The deterministic action vocabulary and executor exist but are not yet integrated into autonomous exploratory runs.
+- Generic text-field boundary testing is not yet implemented as an autonomous strategy.
+- Client-side validation exploration is not yet integrated into the reasoning loop.
 - Form submissions and backend-changing actions are intentionally disabled.
+- The current action vocabulary supports only a limited set of safe operations.
+- Custom JavaScript dropdowns are not yet supported by the generic `select-option` executor.
 - Only a small number of machine-readable evidence-target types are supported.
 - Targeted evidence currently supports select-option findings as the first implementation.
 - Native browser dropdown popups are difficult to capture directly in headless mode.
@@ -733,15 +889,27 @@ Current limitations include:
 
 The current agent is best described as an:
 
-> **AI-assisted autonomous website inspector evolving toward a constrained exploratory testing agent.**
+> **AI-assisted autonomous website inspector with the deterministic foundations of a constrained exploratory testing agent.**
 
 ---
 
 ## Next Major Development Phase
 
-The next major development phase is a **safe planner/action loop**.
+The deterministic foundation for the planner/action loop is now implemented.
 
-The goal is to move from:
+The project now has:
+
+```text
+Validated action vocabulary
+        ↓
+Zod safety validation
+        ↓
+Deterministic Playwright action executor
+```
+
+The next step is to add the **AI planning layer** that can examine structured page observations and request one of these approved actions.
+
+The resulting architecture will move from:
 
 ```text
 Observe
@@ -758,9 +926,11 @@ Observe
     ↓
 Form test hypothesis
     ↓
-Choose approved action
+Request approved action
     ↓
-Execute with Playwright
+Validate action
+    ↓
+Execute deterministically with Playwright
     ↓
 Observe resulting behavior
     ↓
@@ -779,36 +949,52 @@ Agent observes Email field
 Hypothesis:
 The field may enforce email-format validation
         ↓
-Approved action:
-Enter malformed email
+Planner requests:
+Fill Email with malformed value
         ↓
-Blur field
+Zod validates action
         ↓
-Observe validation response
+Playwright fills field
         ↓
-Enter valid email
+Planner requests:
+Blur Email field
         ↓
-Compare behavior
+Playwright blurs field
+        ↓
+Observe validation state
+        ↓
+Reason about result
+        ↓
+Try valid email for comparison
         ↓
 Generate finding only if evidence supports one
 ```
 
 The AI will not directly execute browser commands.
 
-Instead, it will choose from a deterministic set of approved tools such as:
+Instead, it will choose from a deterministic set of approved tools.
+
+The first implemented set is:
 
 ```text
-fill field
-clear field
-blur field
-open dropdown
-select option
+fill-text-field
+clear-field
+blur-field
+select-option
+scroll
+stop
+```
+
+Future safe actions may include:
+
+```text
+inspect validation state
+open custom dropdown
 expand accordion
 switch tab
 open modal
 close modal
 hover
-scroll
 ```
 
 This preserves the project's central safety model:
@@ -840,33 +1026,61 @@ More aggressive testing could be enabled only when running against explicitly ap
 
 ## Roadmap
 
+### AI planner
+
+Build a Gemini planning layer that can:
+
+```text
+observe structured page state
+        ↓
+form a test hypothesis
+        ↓
+select one approved action
+        ↓
+explain why the action is useful
+        ↓
+receive the resulting observation
+        ↓
+decide what to test next
+```
+
+### Planner/action loop integration
+
+Connect:
+
+```text
+page observation
+        +
+AI planner
+        +
+action validation
+        +
+deterministic executor
+        +
+post-action observation
+```
+
+into a bounded exploratory loop.
+
 ### Safe interaction tools
 
-Implement reusable Playwright tools for:
+Already implemented:
 
-- fill field;
-- clear field;
+- fill text field;
+- clear text field;
 - blur field;
+- select native dropdown option;
+- bounded scroll;
+- stop exploration.
+
+Planned additions include:
+
 - inspect validation state;
-- open dropdown;
-- select option;
+- open custom dropdown;
 - expand accordion;
 - switch tab;
 - open and close modal;
-- hover;
-- scroll.
-
-### Planner/action loop
-
-Allow Gemini to:
-
-```text
-observe
-→ form hypothesis
-→ request approved action
-→ receive new evidence
-→ reason again
-```
+- hover.
 
 ### Boundary testing
 
@@ -971,6 +1185,8 @@ Controlled browser exploration
         +
 AI-assisted reasoning
         +
+Constrained exploratory actions
+        +
 Structured evidence
         +
 Targeted verification
@@ -980,7 +1196,7 @@ Strict safety boundaries
 
 The goal is not to replace deterministic automation with an LLM.
 
-The goal is to build an agent that can independently investigate a website, notice potentially meaningful problems, gather useful evidence, and present findings for human review—without giving an AI model unrestricted control over browser actions.
+The goal is to build an agent that can independently investigate a website, form useful testing hypotheses, safely interact with approved UI elements, notice potentially meaningful problems, gather useful evidence, and present findings for human review—without giving an AI model unrestricted control over browser actions.
 
 ---
 
@@ -1000,6 +1216,11 @@ The agent currently supports:
 - machine-readable evidence targets;
 - conditional screenshot evidence;
 - targeted screenshot capture for supported UI elements;
+- a constrained Zod-validated exploratory action vocabulary;
+- deterministic Playwright execution of approved actions;
+- rejection of unsupported and ambiguous action targets;
 - JSON and Markdown reporting.
 
-The next major development phase is a safe planner/action loop that will allow the agent to form test hypotheses, interact with approved page elements, test client-side validation and boundary conditions, observe resulting behavior, and iteratively decide what to test next.
+The deterministic foundation of the planner/action architecture is now in place.
+
+The next major development step is connecting Gemini to that action boundary so the agent can form a test hypothesis, request an approved interaction, observe the resulting browser state, reason about what happened, and iteratively decide what to test next.

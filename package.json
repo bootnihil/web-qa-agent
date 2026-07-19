@@ -1,7 +1,7 @@
 {
-  "name": "regulated-qa-automation-demo",
+  "name": "web-qa-agent",
   "version": "1.0.0",
-  "description": "Playwright and TypeScript QA automation demo with UI tests, API tests, CI execution, and QA documentation.",
+  "description": "AI-assisted web QA agent for safe exploratory testing, evidence collection, and structured issue reporting using TypeScript, Playwright, and Gemini.",
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
@@ -25,7 +25,9 @@
     "agent:page-content-check": "tsx agent/page-content-check.ts",
     "agent:exploratory-qa-schema-check": "tsx agent/exploratory-qa-schema-check.ts",
     "agent:exploratory-qa-prompt-check": "tsx agent/exploratory-qa-prompt-check.ts",
-    "agent:exploratory-qa-analysis-check": "tsx agent/exploratory-qa-analysis-check.ts"
+    "agent:exploratory-qa-analysis-check": "tsx agent/exploratory-qa-analysis-check.ts",
+    "agent:action-schema-check": "tsx agent/action-schema-check.ts",
+    "agent:action-executor-check": "tsx agent/action-executor-check.ts"
   },
   "keywords": [
     "qa",
