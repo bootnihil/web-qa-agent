@@ -1,6 +1,14 @@
-import type { AgentAction } from '../actions/agent-action-schema';
-import type { ExploratoryQaFinding } from '../analysis/exploratory-qa-schema';
-import type { ExtractedPageContent } from '../browser/extract-page-content';
+import type {
+  AgentAction
+} from '../actions/agent-action-schema';
+
+import type {
+  ExploratoryQaFinding
+} from '../analysis/exploratory-qa-schema';
+
+import type {
+  ExtractedPageContent
+} from '../browser/extract-page-content';
 
 export interface PlannerHistoryEntry {
   step: number;
@@ -10,10 +18,18 @@ export interface PlannerHistoryEntry {
 
 export interface BuildPlannerPromptInput {
   pageUrl: string;
-  pageContent: ExtractedPageContent;
-  history: PlannerHistoryEntry[];
-  currentStep: number;
-  maxSteps: number;
+
+  pageContent:
+    ExtractedPageContent;
+
+  history:
+    PlannerHistoryEntry[];
+
+  currentStep:
+    number;
+
+  maxSteps:
+    number;
 
   /**
    * Candidate QA findings produced by the separate exploratory analysis
@@ -21,7 +37,8 @@ export interface BuildPlannerPromptInput {
    *
    * These are investigation leads, not automatically confirmed defects.
    */
-  candidateFindings?: ExploratoryQaFinding[];
+  candidateFindings?:
+    ExploratoryQaFinding[];
 }
 
 /**
@@ -31,7 +48,8 @@ export interface BuildPlannerPromptInput {
  * only one action from the constrained AgentAction vocabulary.
  */
 export function buildPlannerPrompt(
-  input: BuildPlannerPromptInput
+  input:
+    BuildPlannerPromptInput
 ): string {
   const {
     pageUrl,
@@ -40,7 +58,8 @@ export function buildPlannerPrompt(
     currentStep,
     maxSteps,
     candidateFindings = []
-  } = input;
+  } =
+    input;
 
   const remainingSteps =
     Math.max(
@@ -52,7 +71,8 @@ export function buildPlannerPrompt(
     pageUrl,
 
     page: {
-      title: pageContent.title,
+      title:
+        pageContent.title,
 
       headings:
         pageContent.headings.slice(
@@ -114,11 +134,18 @@ export function buildPlannerPrompt(
       remainingSteps,
 
       previousActions:
-        history.map(entry => ({
-          step: entry.step,
-          action: entry.action,
-          result: entry.result
-        }))
+        history.map(
+          entry => ({
+            step:
+              entry.step,
+
+            action:
+              entry.action,
+
+            result:
+              entry.result
+          })
+        )
     }
   };
 
@@ -153,31 +180,100 @@ Do not assume that an action will succeed.
 
 Do not claim that an issue exists merely because you are testing for it.
 
-The action is an experiment. The result will be observed after execution.
+The action is an experiment.
+The result will be observed after execution.
 
-PRIORITIZED CANDIDATE FINDINGS
+==================================================
+CANDIDATE FINDING PRIORITY
+==================================================
 
 The evidence may contain candidateFindings produced by a separate exploratory QA analysis layer.
 
 These findings are NOT automatically confirmed defects.
 
-Treat them as prioritized investigation leads.
+They are prioritized investigation leads.
 
-When one or more candidate findings are present:
+WHEN ONE OR MORE CANDIDATE FINDINGS ARE PRESENT:
 
-1. Review them before starting an unrelated exploratory test.
+You MUST first determine whether one of those candidate findings can be meaningfully investigated using the currently permitted action vocabulary.
 
-2. Prefer a safe action that can verify, reproduce, or gather stronger evidence for a candidate finding when such an action exists.
+You have only two valid choices:
 
-3. Do not blindly accept the candidate finding as correct.
+1. Perform ONE safe action that directly investigates a candidate finding.
 
-4. Use the current browser evidence to confirm that the referenced control or value actually exists.
+OR
 
-5. If the candidate cannot be safely investigated with the available action vocabulary, you may choose another meaningful exploratory action.
+2. Choose stop because:
+   - the finding is already sufficiently evidenced;
+   - no permitted action can meaningfully strengthen or challenge the finding;
+   - the required interaction is prohibited;
+   - the relevant target is not present in current browser evidence;
+   - previous actions already gathered sufficient evidence.
 
-6. Do not repeatedly investigate the same candidate after the available evidence is already sufficient.
+DO NOT begin an unrelated exploratory test while candidate findings are present.
+
+DO NOT abandon the candidate findings and investigate some unrelated control.
+
+DO NOT substitute an unrelated permitted action merely because the action you actually want is prohibited.
 
 For example:
+
+Candidate:
+"Possible typo in body text."
+
+Available actions:
+fill-text-field, clear-field, blur-field, select-option, scroll, stop.
+
+If none of those actions can meaningfully add evidence about the body-text typo:
+
+CORRECT:
+Choose stop and explain that the candidate is already observable in the supplied content and cannot be meaningfully strengthened by the permitted interaction vocabulary.
+
+INCORRECT:
+Scroll the page.
+
+INCORRECT:
+Investigate a cookie banner.
+
+INCORRECT:
+Test an unrelated email field.
+
+INCORRECT:
+Describe clicking a button but output a scroll action.
+
+WHEN NO CANDIDATE FINDINGS ARE PRESENT:
+
+You may independently select a meaningful, safe exploratory hypothesis based on the current browser evidence.
+
+For example:
+- test malformed email input;
+- investigate required-field validation;
+- try safe Unicode input;
+- select an unusual dropdown value;
+- compare field behavior before and after blur.
+
+==================================================
+INVESTIGATING A CANDIDATE
+==================================================
+
+When investigating a candidate finding:
+
+1. Use the current browser evidence to verify that the referenced control or value actually exists.
+
+2. Do not blindly trust the candidate finding.
+
+3. Prefer the smallest safe action capable of producing new evidence.
+
+4. Use exact CURRENT observed control attributes.
+
+5. Candidate evidence targets are hints only.
+   They do not override current browser evidence.
+
+6. Do not repeatedly investigate the same candidate after sufficient evidence has already been collected.
+
+7. If previousActions already demonstrate the candidate sufficiently, choose stop.
+
+Example:
 
 Candidate finding:
 "The Country dropdown contains both Ecuador and Equador."
@@ -198,44 +294,63 @@ A useful next action may be:
   "optionText": "Equador"
 }
 
-The purpose of that action would be to verify that the suspicious value is not merely present in extracted data but is also a genuinely selectable option.
+That action directly tests whether the suspicious value is genuinely selectable.
 
-Use the exact CURRENT observed control attributes for the action target.
+After that action succeeds, a second planner step may choose "Ecuador" for comparison if doing so provides meaningful additional evidence.
 
-Candidate evidence targets are hints for investigation. They do not override current browser evidence or deterministic safety rules.
+Once both values are confirmed selectable, stop.
 
+==================================================
 ONE-ACTION CONSISTENCY RULE
+==================================================
 
 Your hypothesis, reasoning, action, and expectedObservation must all describe the SAME single immediate action.
 
-Do not describe or imply a second action that is not present in the action object.
+The action object is authoritative.
 
-For example, if the requested action is:
+Everything else in your response must describe exactly that action.
+
+Do not describe or imply:
+- a click when the action is scroll;
+- a form submission when the action is fill-text-field;
+- selecting an option when the action is blur-field;
+- any second action not represented by the action object.
+
+For example:
+
+If the requested action is:
 
 {
   "kind": "fill-text-field"
 }
 
-then do NOT say:
-
-- "fill the field and then blur it";
-- "after submitting the form";
-- "click the button next";
-- "select an option afterward".
-
-Those would require separate future planner steps.
-
-Correct:
+CORRECT:
 
 "Fill the email field with malformed input to observe its immediate validation state."
 
-Incorrect:
+INCORRECT:
 
 "Fill the malformed email and then blur the field to trigger validation."
 
-The planner must choose only the NEXT action.
+That would require two planner steps.
 
+Another example:
+
+If the hypothesis says:
+
+"Test whether the cookie consent button works"
+
+then the action MUST actually be an approved action capable of testing that hypothesis.
+
+Because arbitrary button clicking is NOT available, that hypothesis cannot currently be tested.
+
+Do NOT replace the prohibited click with scroll.
+
+Instead choose stop, unless another candidate finding can be directly investigated.
+
+==================================================
 AVAILABLE ACTIONS
+==================================================
 
 1. fill-text-field
 
@@ -305,24 +420,22 @@ Shape:
 
 5. scroll
 
-Use this only when scrolling itself may produce NEW browser state or NEW rendered content.
+Use this ONLY when scrolling itself is the experiment.
 
-Important:
-
-The structured evidence already includes ordinary visible DOM elements even when they are below the current viewport.
-
-Therefore, do NOT scroll merely to:
-- look for an ordinary button that may be farther down the page;
-- look for form controls already present in the rendered DOM;
-- reveal normal below-the-fold text.
-
-Scrolling is useful when there is evidence or a reasonable hypothesis that the page may:
+Scrolling is appropriate only when there is evidence or a meaningful hypothesis that scrolling may:
 - lazy-load additional content;
-- dynamically render more content on scroll;
-- use infinite scrolling;
+- trigger infinite-scroll behavior;
+- dynamically render additional UI;
 - change sticky or scroll-dependent UI state.
 
-If no such reason exists, prefer another meaningful action or stop.
+The supplied structured page evidence already includes ordinary rendered DOM content even when it is below the current viewport.
+
+Therefore, do NOT scroll merely:
+- to look for ordinary text;
+- to find controls already present in the DOM;
+- because no better action is available;
+- as a substitute for a prohibited click;
+- as a generic "explore more" action.
 
 Shape:
 
@@ -334,7 +447,11 @@ Shape:
 
 6. stop
 
-Use this when no additional safe action is likely to produce useful QA evidence.
+Use stop when no additional permitted action is likely to produce meaningful new QA evidence.
+
+Stopping early is GOOD behavior.
+
+The planner is NOT expected to consume all available steps.
 
 Shape:
 
@@ -343,7 +460,9 @@ Shape:
   "reason": string
 }
 
+==================================================
 STRICT SAFETY RULES
+==================================================
 
 You MUST NOT request:
 - form submission;
@@ -366,7 +485,9 @@ Never invent a selector.
 
 Observed buttons are evidence only.
 
-The fact that a Submit, Send, Request Demo, or similar button is present does NOT grant permission to activate it.
+The fact that a Submit, Send, Request Demo, Cookie Consent, Allow, Deny, or similar button exists does NOT grant permission to activate it.
+
+If testing a button would require clicking it, and clicking is not an available action, do NOT construct a different action as a substitute.
 
 For form-control targets:
 - copy label, name, id, and placeholder EXACTLY from the observed control;
@@ -377,7 +498,9 @@ For select-option:
 - copy optionText EXACTLY from an observed option;
 - never invent an option.
 
+==================================================
 SELECT OPTION EVIDENCE
+==================================================
 
 A select control may contain:
 
@@ -392,13 +515,14 @@ Do not claim that an option is absent from the real dropdown when optionsTruncat
 
 You may still investigate suspicious options that are explicitly present in the supplied sample.
 
+==================================================
 EXPLORATORY TESTING GUIDANCE
+==================================================
 
-Prefer actions that test a meaningful hypothesis rather than random interactions.
+When no candidate findings are present, prefer actions that test meaningful hypotheses rather than random interactions.
 
 Useful examples may include:
-- investigating a supplied candidate finding;
-- malformed email input for an email field;
+- malformed email input;
 - empty required-field behavior;
 - whitespace handling;
 - safe special characters;
@@ -413,7 +537,7 @@ Do NOT describe an entire multi-step test as one action.
 
 Choose only the NEXT action.
 
-Use previousActions to avoid repeating an action that has already produced the same evidence unless repetition is intentionally required for a comparison.
+Use previousActions to avoid repeating an action that has already produced the same evidence unless repetition is intentionally required for a meaningful comparison.
 
 Prefer stop over meaningless activity.
 
@@ -421,7 +545,33 @@ The planner is not required to use all available steps.
 
 If the evidence contains no useful safe interactive target, choose stop.
 
+==================================================
+FINAL DECISION CHECK
+==================================================
+
+Before returning your response, verify ALL of the following:
+
+1. Does the hypothesis describe the exact action being requested?
+
+2. Does the reasoning justify that exact action?
+
+3. Does expectedObservation describe only evidence that could result from that exact action?
+
+4. If candidate findings exist, is this action directly investigating one of them?
+
+5. If candidate findings exist but no permitted action can meaningfully investigate them, did you choose stop?
+
+6. Are you avoiding unrelated exploratory activity while candidate findings remain unresolved?
+
+7. Are all target attributes copied exactly from current browser evidence?
+
+8. Is the requested action one of the explicitly permitted action kinds?
+
+If any answer is NO, revise the decision before returning it.
+
+==================================================
 OUTPUT REQUIREMENTS
+==================================================
 
 Return ONLY valid JSON.
 
@@ -440,7 +590,9 @@ Do not include Markdown.
 
 Do not include commentary outside the JSON.
 
+==================================================
 CURRENT BROWSER EVIDENCE
+==================================================
 
 ${JSON.stringify(
   plannerEvidence,

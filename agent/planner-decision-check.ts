@@ -1,177 +1,90 @@
-import { planNextAction } from './planning/plan-next-action';
+import {
+  planNextAction
+} from './planning/plan-next-action';
 
 async function main(): Promise<void> {
   console.log(
-    'Asking Gemini to plan one safe exploratory QA action...\n'
+    'Asking Gemini to handle a non-interactive candidate finding safely...\n'
   );
 
   const decision =
     await planNextAction({
       pageUrl:
-        'https://example.com/contact',
+        'https://example.com/platform',
 
-      currentStep: 1,
+      currentStep:
+        1,
 
-      maxSteps: 6,
+      maxSteps:
+        3,
 
-      history: [
+      history:
+        [],
+
+      candidateFindings: [
         {
-          step: 1,
+          category:
+            'content',
 
-          action: {
-            kind:
-              'scroll',
+          severity:
+            'low',
 
-            direction:
-              'down',
+          confidence:
+            'high',
 
-            viewportCount:
-              1
-          },
+          title:
+            'Possible typo in body text',
 
-          result:
-            'Scrolled down by 1 viewport and discovered dynamically loaded content.'
+          evidence:
+            'The page text contains the duplicated phrase "clinical clinical workflow".',
+
+          reasoning:
+            'The duplicated adjacent word appears to be a content error and is directly observable in the extracted page text.',
+
+          suggestedCheck:
+            'Confirm the duplicated wording in the rendered page content.',
+
+          evidenceTarget:
+            null
         }
       ],
 
       pageContent: {
         title:
-          'Contact Us',
+          'Clinical AI Platform',
 
         headings: [
-          'Contact Us',
-          'Request a Demo'
+          'Clinical AI Platform',
+          'Built for Enterprise Scale'
         ],
 
         bodyText:
-          'Request a Demo Work Email Country Please Select Ecuador Egypt Zimbabwe Equador',
+          'Our clinical clinical workflow platform helps healthcare teams coordinate care across the enterprise.',
 
-        links: [],
+        links:
+          [],
 
+        /*
+         * This intentionally reproduces the tempting but irrelevant
+         * cookie-control evidence from the real-site run.
+         *
+         * Buttons are evidence only and cannot be clicked by the
+         * current safe action vocabulary.
+         */
         buttons: [
-          'Submit'
+          'Allow all',
+          'Deny'
         ],
 
-        textFields: [
-          {
-            tagName:
-              'input',
+        /*
+         * No editable form controls exist that could meaningfully
+         * investigate the candidate content issue.
+         */
+        textFields:
+          [],
 
-            inputType:
-              'email',
-
-            label:
-              'Work Email',
-
-            name:
-              'email',
-
-            id:
-              'email',
-
-            placeholder:
-              'Enter your work email',
-
-            required:
-              true,
-
-            disabled:
-              false,
-
-            readOnly:
-              false,
-
-            value:
-              '',
-
-            valid:
-              false,
-
-            validationMessage:
-              'Please fill out this field.',
-
-            ariaInvalid:
-              null
-          }
-        ],
-
-        selects: [
-          {
-            label:
-              'Country',
-
-            name:
-              'country',
-
-            id:
-              'country',
-
-            required:
-              true,
-
-            disabled:
-              false,
-
-            totalOptions:
-              5,
-
-            optionsTruncated:
-              false,
-
-            options: [
-              {
-                text:
-                  'Please Select',
-
-                value:
-                  '',
-
-                selected:
-                  true
-              },
-              {
-                text:
-                  'Ecuador',
-
-                value:
-                  'Ecuador',
-
-                selected:
-                  false
-              },
-              {
-                text:
-                  'Egypt',
-
-                value:
-                  'Egypt',
-
-                selected:
-                  false
-              },
-              {
-                text:
-                  'Zimbabwe',
-
-                value:
-                  'Zimbabwe',
-
-                selected:
-                  false
-              },
-              {
-                text:
-                  'Equador',
-
-                value:
-                  'Equador',
-
-                selected:
-                  false
-              }
-            ]
-          }
-        ]
+        selects:
+          []
       }
     });
 
@@ -194,6 +107,29 @@ async function main(): Promise<void> {
   console.log(
     `Requested safe action: ${decision.action.kind}`
   );
+
+  /*
+   * This is the actual regression assertion.
+   *
+   * The candidate finding is already directly observable in the page
+   * evidence, and none of the permitted interactive actions can add
+   * meaningful evidence.
+   *
+   * The planner should therefore stop rather than drifting into an
+   * unrelated cookie-banner test or meaningless scroll action.
+   */
+  if (
+    decision.action.kind !==
+    'stop'
+  ) {
+    throw new Error(
+      `Expected planner to stop for a non-interactive content candidate, but it requested "${decision.action.kind}".`
+    );
+  }
+
+  console.log(
+    '\nPlanner correctly stopped instead of performing unrelated exploration.'
+  );
 }
 
 main().catch(
@@ -214,6 +150,7 @@ main().catch(
       );
     }
 
-    process.exitCode = 1;
+    process.exitCode =
+      1;
   }
 );
