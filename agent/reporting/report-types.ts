@@ -1,9 +1,30 @@
-import type { ClassifiedDiagnostics } from '../analysis/classify-diagnostics';
-import type { PageFinding } from '../analysis/evaluate-page';
-import type { ExploratoryQaAnalysis } from '../analysis/exploratory-qa-schema';
-import type { PageDiagnostics } from '../browser/collect-page-diagnostics';
-import type { NavigationLink } from '../browser/inspect-navigation';
-import type { VisitedPageObservation } from '../browser/visit-approved-link';
+import type {
+  ClassifiedDiagnostics
+} from '../analysis/classify-diagnostics';
+
+import type {
+  PageFinding
+} from '../analysis/evaluate-page';
+
+import type {
+  ExploratoryQaAnalysis
+} from '../analysis/exploratory-qa-schema';
+
+import type {
+  PageDiagnostics
+} from '../browser/collect-page-diagnostics';
+
+import type {
+  NavigationLink
+} from '../browser/inspect-navigation';
+
+import type {
+  VisitedPageObservation
+} from '../browser/visit-approved-link';
+
+import type {
+  ExploratoryLoopResult
+} from '../planning/run-exploratory-loop';
 
 export interface HomepageObservation {
   requestedUrl: string;
@@ -49,10 +70,26 @@ export interface InspectedPageResult {
    * by Gemini exploratory QA analysis.
    */
   exploratoryQaAnalysis: ExploratoryQaAnalysis;
+
+  /*
+   * The bounded autonomous investigation performed
+   * after exploratory QA analysis.
+   *
+   * This records the planner decisions, approved actions,
+   * execution results, and before/after observations.
+   *
+   * Null means that no autonomous investigation was run
+   * for this page.
+   */
+  exploratoryInvestigation:
+    ExploratoryLoopResult | null;
 }
 
 export interface AgentRunOutcome {
-  type: 'completed' | 'finished';
+  type:
+    | 'completed'
+    | 'finished';
+
   summary: string;
 }
 
@@ -71,15 +108,22 @@ export interface SiteAgentReport {
 
   outcome: AgentRunOutcome;
 
-  inspectedPages: InspectedPageResult[];
+  inspectedPages:
+    InspectedPageResult[];
 
   summary: {
     pagesInspected: number;
 
     findingsCount: number;
-    highestSeverity: 'high' | 'medium' | 'low' | 'none';
+
+    highestSeverity:
+      | 'high'
+      | 'medium'
+      | 'low'
+      | 'none';
 
     exploratoryQaFindingsCount: number;
+
     highestExploratoryQaSeverity:
       | 'high'
       | 'medium'
@@ -87,7 +131,9 @@ export interface SiteAgentReport {
       | 'none';
 
     actionableDiagnosticsCount: number;
+
     diagnosticsNeedingReviewCount: number;
+
     ignoredDiagnosticNoiseCount: number;
   };
 }

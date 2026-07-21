@@ -17,11 +17,8 @@ async function main(): Promise<void> {
   const site =
     getSiteConfig(siteId);
 
-  const maxSteps =
-    Math.min(
-      site.maxAgentSteps,
-      3
-    );
+const maxSteps =
+  site.maxExploratoryStepsPerPage;
 
   console.log(
     'Running constrained real-site autonomous exploration...\n'

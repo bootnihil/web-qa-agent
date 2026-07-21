@@ -1,30 +1,43 @@
 import { chromium } from '@playwright/test';
+
 import { analyzePageForQa } from './analysis/analyze-page-for-qa';
 import { classifyDiagnostics } from './analysis/classify-diagnostics';
 import { evaluatePageObservation } from './analysis/evaluate-page';
-import type { ExploratoryQaFinding } from './analysis/exploratory-qa-schema';
+
+import type {
+  ExploratoryQaFinding
+} from './analysis/exploratory-qa-schema';
+
 import { capturePageScreenshot } from './browser/capture-page-screenshot';
 import { collectPageDiagnostics } from './browser/collect-page-diagnostics';
 import { extractPageContent } from './browser/extract-page-content';
+
 import {
   inspectNavigation,
   type NavigationLink
 } from './browser/inspect-navigation';
+
 import { visitApprovedLink } from './browser/visit-approved-link';
 import { chooseNavigationLink } from './decisions/choose-navigation-link';
+
 import {
   getUnvisitedLinks,
   markUrlVisited,
   normalizeUrlForComparison
 } from './exploration/visited-links';
+
+import { runExploratoryLoop } from './planning/run-exploratory-loop';
+
 import {
   createRunId,
   getHighestSeverity
 } from './reporting/report-utils';
+
 import type {
   InspectedPageResult,
   SiteAgentReport
 } from './reporting/report-types';
+
 import { writeJsonReport } from './reporting/write-json-report';
 import { writeMarkdownReport } from './reporting/write-markdown-report';
 import { getSiteConfig } from './sites';
@@ -36,15 +49,24 @@ function addLinksToPool(
   let addedCount = 0;
 
   for (const link of links) {
-    const normalizedUrl = normalizeUrlForComparison(
-      link.url
-    );
+    const normalizedUrl =
+      normalizeUrlForComparison(
+        link.url
+      );
 
-    if (linkPool.has(normalizedUrl)) {
+    if (
+      linkPool.has(
+        normalizedUrl
+      )
+    ) {
       continue;
     }
 
-    linkPool.set(normalizedUrl, link);
+    linkPool.set(
+      normalizedUrl,
+      link
+    );
+
     addedCount += 1;
   }
 
@@ -53,10 +75,16 @@ function addLinksToPool(
 
 function getHighestExploratoryQaSeverity(
   findings: ExploratoryQaFinding[]
-): 'high' | 'medium' | 'low' | 'none' {
+):
+  | 'high'
+  | 'medium'
+  | 'low'
+  | 'none' {
   if (
     findings.some(
-      (finding) => finding.severity === 'high'
+      finding =>
+        finding.severity ===
+        'high'
     )
   ) {
     return 'high';
@@ -64,7 +92,9 @@ function getHighestExploratoryQaSeverity(
 
   if (
     findings.some(
-      (finding) => finding.severity === 'medium'
+      finding =>
+        finding.severity ===
+        'medium'
     )
   ) {
     return 'medium';
@@ -72,7 +102,9 @@ function getHighestExploratoryQaSeverity(
 
   if (
     findings.some(
-      (finding) => finding.severity === 'low'
+      finding =>
+        finding.severity ===
+        'low'
     )
   ) {
     return 'low';
@@ -82,13 +114,27 @@ function getHighestExploratoryQaSeverity(
 }
 
 async function main(): Promise<void> {
-  const startedAt = new Date();
-  const runId = createRunId(startedAt);
+  const startedAt =
+    new Date();
 
-  const siteId = process.argv[2] ?? 'aidoc';
-  const site = getSiteConfig(siteId);
+  const runId =
+    createRunId(
+      startedAt
+    );
 
-  const configuredStartUrl = new URL(site.startUrl);
+  const siteId =
+    process.argv[2] ??
+    'aidoc';
+
+  const site =
+    getSiteConfig(
+      siteId
+    );
+
+  const configuredStartUrl =
+    new URL(
+      site.startUrl
+    );
 
   if (
     !site.allowedHosts.includes(
@@ -100,36 +146,68 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log(`Run ID: ${runId}`);
-  console.log(`Selected site: ${site.name}`);
-  console.log(`Start URL: ${site.startUrl}`);
-  console.log(`Maximum pages: ${site.maxPages}`);
   console.log(
-    `Maximum agent steps: ${site.maxAgentSteps}`
+    `Run ID: ${runId}`
   );
 
-  const browser = await chromium.launch({
-    headless: true
-  });
+  console.log(
+    `Selected site: ${site.name}`
+  );
+
+  console.log(
+    `Start URL: ${site.startUrl}`
+  );
+
+  console.log(
+    `Maximum pages: ${site.maxPages}`
+  );
+
+  console.log(
+    `Maximum navigation steps: ${site.maxAgentSteps}`
+  );
+
+  console.log(
+    `Maximum exploratory steps per page: ${site.maxExploratoryStepsPerPage}`
+  );
+
+  console.log(
+    `Form submission allowed: ${site.allowFormSubmission}`
+  );
+
+  const browser =
+    await chromium.launch({
+      headless: true
+    });
 
   try {
-    const page = await browser.newPage();
+    const page =
+      await browser.newPage();
 
     const diagnosticsCollector =
-      collectPageDiagnostics(page);
+      collectPageDiagnostics(
+        page
+      );
 
     try {
-      const homepageResponse = await page.goto(
-        site.startUrl,
-        {
-          waitUntil: 'domcontentloaded',
-          timeout: 30_000
-        }
-      );
+      /*
+       * Open the configured starting page.
+       */
+      const homepageResponse =
+        await page.goto(
+          site.startUrl,
+          {
+            waitUntil:
+              'domcontentloaded',
 
-      const homepageFinalUrl = new URL(
-        page.url()
-      );
+            timeout:
+              30_000
+          }
+        );
+
+      const homepageFinalUrl =
+        new URL(
+          page.url()
+        );
 
       if (
         !site.allowedHosts.includes(
@@ -142,28 +220,40 @@ async function main(): Promise<void> {
       }
 
       const homepageObservation = {
-        requestedUrl: site.startUrl,
+        requestedUrl:
+          site.startUrl,
+
         finalUrl:
           homepageFinalUrl.toString(),
-        title: await page.title(),
+
+        title:
+          await page.title(),
+
         httpStatus:
-          homepageResponse?.status() ?? null
+          homepageResponse?.status() ??
+          null
       };
 
-      console.log('\nHomepage opened:');
       console.log(
-        `HTTP status: ${
-          homepageObservation.httpStatus ??
-          'unknown'
-        }`
+        '\nHomepage opened:'
       );
+
+      console.log(
+        `HTTP status: ${homepageObservation.httpStatus ?? 'unknown'}`
+      );
+
       console.log(
         `Final URL: ${homepageObservation.finalUrl}`
       );
+
       console.log(
         `Title: ${homepageObservation.title}`
       );
 
+      /*
+       * Track pages already visited so the agent does not
+       * continually revisit the same navigation targets.
+       */
       const visitedUrls =
         new Set<string>();
 
@@ -177,10 +267,14 @@ async function main(): Promise<void> {
         homepageObservation.finalUrl
       );
 
-      const linkPool = new Map<
-        string,
-        NavigationLink
-      >();
+      /*
+       * The link pool grows as new pages are inspected.
+       */
+      const linkPool =
+        new Map<
+          string,
+          NavigationLink
+        >();
 
       const homepageLinks =
         await inspectNavigation(
@@ -200,12 +294,23 @@ async function main(): Promise<void> {
       const inspectedPages:
         InspectedPageResult[] = [];
 
-      let agentSteps = 0;
+      let agentSteps =
+        0;
 
       let outcome:
-        SiteAgentReport['outcome'] | null =
-        null;
+        SiteAgentReport['outcome'] |
+        null =
+          null;
 
+      /*
+       * Multi-page exploration loop.
+       *
+       * The navigation agent chooses which safe page to visit next.
+       *
+       * Once a page is opened, the separate exploratory planner is
+       * allowed to investigate that page within its own bounded
+       * per-page action budget.
+       */
       while (
         inspectedPages.length <
           site.maxPages &&
@@ -221,18 +326,17 @@ async function main(): Promise<void> {
           );
 
         const candidateLinks =
-          unvisitedLinks.slice(0, 20);
+          unvisitedLinks.slice(
+            0,
+            20
+          );
 
         console.log(
-          `\nExploration step ${
-            agentSteps + 1
-          }/${site.maxAgentSteps}`
+          `\nNavigation step ${agentSteps + 1}/${site.maxAgentSteps}`
         );
 
         console.log(
-          `Pages inspected: ${
-            inspectedPages.length
-          }/${site.maxPages}`
+          `Pages inspected: ${inspectedPages.length}/${site.maxPages}`
         );
 
         console.log(
@@ -240,10 +344,13 @@ async function main(): Promise<void> {
         );
 
         if (
-          candidateLinks.length === 0
+          candidateLinks.length ===
+          0
         ) {
           outcome = {
-            type: 'finished',
+            type:
+              'finished',
+
             summary:
               'No unvisited safe navigation links remained.'
           };
@@ -261,6 +368,9 @@ async function main(): Promise<void> {
 
         agentSteps += 1;
 
+        /*
+         * Gemini chooses one safe internal navigation target.
+         */
         const decision =
           await chooseNavigationLink(
             site,
@@ -268,10 +378,13 @@ async function main(): Promise<void> {
           );
 
         if (
-          decision.type === 'finish'
+          decision.type ===
+          'finish'
         ) {
           outcome = {
-            type: 'finished',
+            type:
+              'finished',
+
             summary:
               decision.summary
           };
@@ -310,6 +423,11 @@ async function main(): Promise<void> {
 
         diagnosticsCollector.reset();
 
+        /*
+         * The deterministic browser layer performs the approved
+         * navigation and verifies the destination remains inside
+         * the configured host boundary.
+         */
         const pageObservation =
           await visitApprovedLink(
             page,
@@ -323,9 +441,8 @@ async function main(): Promise<void> {
         );
 
         /*
-         * Some resource failures and console
-         * messages arrive shortly after the
-         * main document loads.
+         * Some resource failures and console messages arrive shortly
+         * after the main document has loaded.
          */
         await page.waitForTimeout(
           1_000
@@ -343,7 +460,7 @@ async function main(): Promise<void> {
           classifiedDiagnostics
             .failedRequests
             .filter(
-              (item) =>
+              item =>
                 item.disposition ===
                 'actionable'
             )
@@ -353,7 +470,7 @@ async function main(): Promise<void> {
           classifiedDiagnostics
             .failedRequests
             .filter(
-              (item) =>
+              item =>
                 item.disposition ===
                 'ignored-noise'
             )
@@ -363,7 +480,7 @@ async function main(): Promise<void> {
           classifiedDiagnostics
             .failedRequests
             .filter(
-              (item) =>
+              item =>
                 item.disposition ===
                 'needs-review'
             )
@@ -409,13 +526,17 @@ async function main(): Promise<void> {
           `Ignored noise: ${ignoredNoiseCount}`
         );
 
+        /*
+         * Deterministic page-health evaluation.
+         */
         const findings =
           evaluatePageObservation(
             pageObservation
           );
 
         if (
-          findings.length === 0
+          findings.length ===
+          0
         ) {
           console.log(
             '\nDeterministic evaluation: no rule-based page health issues found.'
@@ -435,8 +556,8 @@ async function main(): Promise<void> {
         }
 
         /*
-         * Extract a compact representation
-         * of visible, user-facing page content.
+         * Extract the current user-facing page state in a generic,
+         * structured representation that Gemini can reason about.
          */
         const pageContent =
           await extractPageContent(
@@ -460,13 +581,32 @@ async function main(): Promise<void> {
         );
 
         console.log(
+          `Text fields: ${pageContent.textFields.length}`
+        );
+
+        console.log(
+          `Select controls: ${pageContent.selects.length}`
+        );
+
+        console.log(
           `Body text characters: ${pageContent.bodyText.length}`
         );
 
         /*
-         * Gemini now reviews the collected
-         * evidence for broader exploratory
-         * QA candidate issues.
+         * Password-bearing pages are still observable, but we do not
+         * autonomously interact with them.
+         */
+        const containsPasswordField =
+          pageContent.textFields.some(
+            field =>
+              field.inputType ===
+              'password'
+          );
+
+        /*
+         * Gemini performs evidence-grounded exploratory QA analysis.
+         *
+         * These findings are candidate issues, not confirmed defects.
          */
         const exploratoryQaAnalysis =
           await analyzePageForQa({
@@ -496,7 +636,7 @@ async function main(): Promise<void> {
 
         for (
           const exploratoryFinding of
-          exploratoryQaAnalysis.findings
+            exploratoryQaAnalysis.findings
         ) {
           console.log(
             `- [${exploratoryFinding.severity}/${exploratoryFinding.confidence}] ${exploratoryFinding.title}`
@@ -504,26 +644,123 @@ async function main(): Promise<void> {
         }
 
         /*
-         * Screenshot evidence is captured
-         * whenever any deterministic,
-         * diagnostic, or exploratory signal
-         * deserves further investigation.
+         * Run the bounded autonomous investigation.
+         *
+         * The planner sees:
+         * - the current live browser state;
+         * - the candidate findings discovered above;
+         * - its own previous investigation history.
+         *
+         * It may choose safe supported actions or stop voluntarily.
          */
+        let exploratoryInvestigation:
+          InspectedPageResult['exploratoryInvestigation'] =
+            null;
+
+        if (
+          containsPasswordField
+        ) {
+          console.log(
+            '\nAutonomous investigation skipped: password field detected.'
+          );
+        } else if (
+          site.maxExploratoryStepsPerPage >
+          0
+        ) {
+          console.log(
+            '\nStarting autonomous page investigation...'
+          );
+
+          console.log(
+            `Maximum investigation steps: ${site.maxExploratoryStepsPerPage}`
+          );
+
+          console.log(
+            `Candidate findings supplied to planner: ${exploratoryQaAnalysis.findings.length}`
+          );
+
+          exploratoryInvestigation =
+            await runExploratoryLoop(
+              page,
+              pageObservation.finalUrl,
+              site.maxExploratoryStepsPerPage,
+              exploratoryQaAnalysis.findings
+            );
+
+          /*
+           * Defense-in-depth host verification.
+           *
+           * None of the currently permitted exploratory actions can
+           * intentionally navigate away, but we still verify the browser
+           * remained inside the configured host boundary.
+           */
+          const postInvestigationUrl =
+            new URL(
+              page.url()
+            );
+
+          if (
+            !site.allowedHosts.includes(
+              postInvestigationUrl.hostname
+            )
+          ) {
+            throw new Error(
+              `Autonomous investigation escaped to disallowed host "${postInvestigationUrl.hostname}".`
+            );
+          }
+
+          console.log(
+            '\nAutonomous page investigation completed:'
+          );
+
+          console.log(
+            `Completed steps: ${exploratoryInvestigation.completedSteps}/${exploratoryInvestigation.maxSteps}`
+          );
+
+          console.log(
+            `Stop reason: ${exploratoryInvestigation.stopReason}`
+          );
+        }
+
+        /*
+         * Capture evidence after autonomous investigation so the saved
+         * screenshot represents the resulting browser state.
+         */
+        const investigationPerformedAction =
+          exploratoryInvestigation
+            ?.steps
+            .some(
+              step =>
+                step.decision.action.kind !==
+                  'stop' &&
+                step.executionResult.status ===
+                  'executed'
+            ) ??
+          false;
+
         const shouldCaptureScreenshot =
-          findings.length > 0 ||
-          actionableRequestCount > 0 ||
-          needsReviewCount > 0 ||
+          findings.length >
+            0 ||
+          actionableRequestCount >
+            0 ||
+          needsReviewCount >
+            0 ||
           exploratoryQaAnalysis
-            .findings.length > 0;
+            .findings
+            .length >
+            0 ||
+          investigationPerformedAction;
 
         let screenshotPath:
-          string | null = null;
+          string | null =
+            null;
 
         if (
           shouldCaptureScreenshot
         ) {
           const pageNumber =
-            inspectedPages.length + 1;
+            inspectedPages.length +
+            1;
 
           const screenshot =
             await capturePageScreenshot(
@@ -548,10 +785,19 @@ async function main(): Promise<void> {
           );
         }
 
+        /*
+         * Preserve everything we learned about the page:
+         *
+         * - deterministic findings;
+         * - AI candidate findings;
+         * - autonomous planner decisions and actions;
+         * - browser evidence.
+         */
         inspectedPages.push({
           selection: {
             link:
               decision.link,
+
             reason:
               decision.reason
           },
@@ -567,9 +813,17 @@ async function main(): Promise<void> {
 
           findings,
 
-          exploratoryQaAnalysis
+          exploratoryQaAnalysis,
+
+          exploratoryInvestigation
         });
 
+        /*
+         * Reinspect navigation after the page investigation.
+         *
+         * This allows newly available safe links to enter the pool for
+         * subsequent website-level exploration.
+         */
         const discoveredLinks =
           await inspectNavigation(
             page,
@@ -591,15 +845,21 @@ async function main(): Promise<void> {
         );
       }
 
+      /*
+       * Determine why the site-level exploration stopped.
+       */
       if (
-        outcome === null
+        outcome ===
+        null
       ) {
         if (
           inspectedPages.length >=
           site.maxPages
         ) {
           outcome = {
-            type: 'completed',
+            type:
+              'completed',
+
             summary:
               `Reached the configured page limit of ${site.maxPages}.`
           };
@@ -608,28 +868,35 @@ async function main(): Promise<void> {
           site.maxAgentSteps
         ) {
           outcome = {
-            type: 'completed',
+            type:
+              'completed',
+
             summary:
-              `Reached the configured agent-step limit of ${site.maxAgentSteps}.`
+              `Reached the configured navigation-step limit of ${site.maxAgentSteps}.`
           };
         } else {
           outcome = {
-            type: 'completed',
+            type:
+              'completed',
+
             summary:
               'Exploration completed successfully.'
           };
         }
       }
 
+      /*
+       * Aggregate run-level report statistics.
+       */
       const allFindings =
         inspectedPages.flatMap(
-          (pageResult) =>
+          pageResult =>
             pageResult.findings
         );
 
       const allExploratoryQaFindings =
         inspectedPages.flatMap(
-          (pageResult) =>
+          pageResult =>
             pageResult
               .exploratoryQaAnalysis
               .findings
@@ -637,32 +904,38 @@ async function main(): Promise<void> {
 
       const allClassifiedFailedRequests =
         inspectedPages.flatMap(
-          (pageResult) =>
+          pageResult =>
             pageResult
               .classifiedDiagnostics
               .failedRequests
         );
 
       const actionableDiagnosticsCount =
-        allClassifiedFailedRequests.filter(
-          (item) =>
-            item.disposition ===
-            'actionable'
-        ).length;
+        allClassifiedFailedRequests
+          .filter(
+            item =>
+              item.disposition ===
+              'actionable'
+          )
+          .length;
 
       const diagnosticsNeedingReviewCount =
-        allClassifiedFailedRequests.filter(
-          (item) =>
-            item.disposition ===
-            'needs-review'
-        ).length;
+        allClassifiedFailedRequests
+          .filter(
+            item =>
+              item.disposition ===
+              'needs-review'
+          )
+          .length;
 
       const ignoredDiagnosticNoiseCount =
-        allClassifiedFailedRequests.filter(
-          (item) =>
-            item.disposition ===
-            'ignored-noise'
-        ).length;
+        allClassifiedFailedRequests
+          .filter(
+            item =>
+              item.disposition ===
+              'ignored-noise'
+          )
+          .length;
 
       const report:
         SiteAgentReport = {
@@ -675,8 +948,12 @@ async function main(): Promise<void> {
           new Date().toISOString(),
 
         site: {
-          id: site.id,
-          name: site.name,
+          id:
+            site.id,
+
+          name:
+            site.name,
+
           startUrl:
             site.startUrl
         },
@@ -764,6 +1041,7 @@ main().catch(
       error
     );
 
-    process.exitCode = 1;
+    process.exitCode =
+      1;
   }
 );

@@ -38,7 +38,8 @@ async function main(): Promise<void> {
 
   const browser =
     await chromium.launch({
-      headless: true
+      headless:
+        true
     });
 
   try {
@@ -143,9 +144,12 @@ async function main(): Promise<void> {
       };
 
     const shouldCaptureScreenshot =
-      findings.length > 0 ||
-      actionableRequestCount > 0 ||
-      needsReviewCount > 0;
+      findings.length >
+        0 ||
+      actionableRequestCount >
+        0 ||
+      needsReviewCount >
+        0;
 
     let screenshotPath:
       string | null = null;
@@ -251,7 +255,10 @@ async function main(): Promise<void> {
 
             findings,
 
-            exploratoryQaAnalysis
+            exploratoryQaAnalysis,
+
+            exploratoryInvestigation:
+              null
           }
         ],
 
@@ -333,6 +340,7 @@ main().catch(
       error
     );
 
-    process.exitCode = 1;
+    process.exitCode =
+      1;
   }
 );

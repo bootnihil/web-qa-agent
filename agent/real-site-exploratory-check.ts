@@ -1,19 +1,29 @@
 import { chromium } from '@playwright/test';
+
 import { analyzePageForQa } from './analysis/analyze-page-for-qa';
 import { classifyDiagnostics } from './analysis/classify-diagnostics';
 import { evaluatePageObservation } from './analysis/evaluate-page';
-import type { ExploratoryQaFinding } from './analysis/exploratory-qa-schema';
+
+import type {
+  ExploratoryQaFinding
+} from './analysis/exploratory-qa-schema';
+
 import { capturePageScreenshot } from './browser/capture-page-screenshot';
 import { captureSelectOptionEvidence } from './browser/capture-select-option-evidence';
 import { collectPageDiagnostics } from './browser/collect-page-diagnostics';
 import { extractPageContent } from './browser/extract-page-content';
 import { inspectNavigation } from './browser/inspect-navigation';
 import { visitApprovedLink } from './browser/visit-approved-link';
+
 import {
   createRunId,
   getHighestSeverity
 } from './reporting/report-utils';
-import type { SiteAgentReport } from './reporting/report-types';
+
+import type {
+  SiteAgentReport
+} from './reporting/report-types';
+
 import { writeJsonReport } from './reporting/write-json-report';
 import { writeMarkdownReport } from './reporting/write-markdown-report';
 import { getSiteConfig } from './sites';
@@ -23,7 +33,8 @@ function getHighestExploratoryQaSeverity(
 ): 'high' | 'medium' | 'low' | 'none' {
   if (
     findings.some(
-      (finding) => finding.severity === 'high'
+      finding =>
+        finding.severity === 'high'
     )
   ) {
     return 'high';
@@ -31,7 +42,8 @@ function getHighestExploratoryQaSeverity(
 
   if (
     findings.some(
-      (finding) => finding.severity === 'medium'
+      finding =>
+        finding.severity === 'medium'
     )
   ) {
     return 'medium';
@@ -39,7 +51,8 @@ function getHighestExploratoryQaSeverity(
 
   if (
     findings.some(
-      (finding) => finding.severity === 'low'
+      finding =>
+        finding.severity === 'low'
     )
   ) {
     return 'low';
@@ -49,38 +62,67 @@ function getHighestExploratoryQaSeverity(
 }
 
 async function main(): Promise<void> {
-  const startedAt = new Date();
-  const runId = createRunId(startedAt);
+  const startedAt =
+    new Date();
 
-  const siteId = process.argv[2] ?? 'aidoc';
-  const site = getSiteConfig(siteId);
+  const runId =
+    createRunId(
+      startedAt
+    );
 
-  console.log(`Run ID: ${runId}`);
-  console.log(`Selected site: ${site.name}`);
-  console.log(`Start URL: ${site.startUrl}`);
+  const siteId =
+    process.argv[2] ??
+    'aidoc';
 
-  const browser = await chromium.launch({
-    headless: true
-  });
+  const site =
+    getSiteConfig(
+      siteId
+    );
+
+  console.log(
+    `Run ID: ${runId}`
+  );
+
+  console.log(
+    `Selected site: ${site.name}`
+  );
+
+  console.log(
+    `Start URL: ${site.startUrl}`
+  );
+
+  const browser =
+    await chromium.launch({
+      headless:
+        true
+    });
 
   try {
-    const page = await browser.newPage();
+    const page =
+      await browser.newPage();
 
     const diagnosticsCollector =
-      collectPageDiagnostics(page);
+      collectPageDiagnostics(
+        page
+      );
 
     try {
-      const homepageResponse = await page.goto(
-        site.startUrl,
-        {
-          waitUntil: 'domcontentloaded',
-          timeout: 30_000
-        }
-      );
+      const homepageResponse =
+        await page.goto(
+          site.startUrl,
+          {
+            waitUntil:
+              'domcontentloaded',
 
-      const homepageUrl = new URL(
-        page.url()
-      );
+            timeout:
+              30_000
+          }
+        );
+
+      const homepageUrl =
+        new URL(
+          page.url()
+        );
 
       if (
         !site.allowedHosts.includes(
@@ -93,17 +135,28 @@ async function main(): Promise<void> {
       }
 
       const homepageObservation = {
-        requestedUrl: site.startUrl,
-        finalUrl: homepageUrl.toString(),
-        title: await page.title(),
+        requestedUrl:
+          site.startUrl,
+
+        finalUrl:
+          homepageUrl.toString(),
+
+        title:
+          await page.title(),
+
         httpStatus:
-          homepageResponse?.status() ?? null
+          homepageResponse?.status() ??
+          null
       };
 
-      console.log('\nHomepage opened:');
+      console.log(
+        '\nHomepage opened:'
+      );
+
       console.log(
         `HTTP status: ${homepageObservation.httpStatus ?? 'unknown'}`
       );
+
       console.log(
         `Title: ${homepageObservation.title}`
       );
@@ -116,8 +169,9 @@ async function main(): Promise<void> {
 
       const targetLink =
         navigationLinks.find(
-          (link) =>
-            link.url !== site.startUrl &&
+          link =>
+            link.url !==
+              site.startUrl &&
             link.url !==
               homepageObservation.finalUrl
         );
@@ -131,9 +185,11 @@ async function main(): Promise<void> {
       console.log(
         '\nDeterministically selected test page:'
       );
+
       console.log(
         `Text: ${targetLink.text}`
       );
+
       console.log(
         `URL: ${targetLink.url}`
       );
@@ -172,18 +228,23 @@ async function main(): Promise<void> {
       console.log(
         '\nStructured page content extracted:'
       );
+
       console.log(
         `Headings: ${pageContent.headings.length}`
       );
+
       console.log(
         `Links: ${pageContent.links.length}`
       );
+
       console.log(
         `Buttons: ${pageContent.buttons.length}`
       );
+
       console.log(
         `Select controls: ${pageContent.selects.length}`
       );
+
       console.log(
         `Body text characters: ${pageContent.bodyText.length}`
       );
@@ -215,22 +276,34 @@ async function main(): Promise<void> {
       );
 
       const actionableDiagnosticsCount =
-        classifiedDiagnostics.failedRequests.filter(
-          (item) =>
-            item.disposition === 'actionable'
-        ).length;
+        classifiedDiagnostics
+          .failedRequests
+          .filter(
+            item =>
+              item.disposition ===
+              'actionable'
+          )
+          .length;
 
       const diagnosticsNeedingReviewCount =
-        classifiedDiagnostics.failedRequests.filter(
-          (item) =>
-            item.disposition === 'needs-review'
-        ).length;
+        classifiedDiagnostics
+          .failedRequests
+          .filter(
+            item =>
+              item.disposition ===
+              'needs-review'
+          )
+          .length;
 
       const ignoredDiagnosticNoiseCount =
-        classifiedDiagnostics.failedRequests.filter(
-          (item) =>
-            item.disposition === 'ignored-noise'
-        ).length;
+        classifiedDiagnostics
+          .failedRequests
+          .filter(
+            item =>
+              item.disposition ===
+              'ignored-noise'
+          )
+          .length;
 
       /*
        * Prefer focused, machine-targeted evidence when
@@ -250,19 +323,24 @@ async function main(): Promise<void> {
       for (
         let findingIndex = 0;
         findingIndex <
-        exploratoryQaAnalysis.findings.length;
+          exploratoryQaAnalysis
+            .findings
+            .length;
         findingIndex += 1
       ) {
         const exploratoryFinding =
-          exploratoryQaAnalysis.findings[
-            findingIndex
-          ];
+          exploratoryQaAnalysis
+            .findings[
+              findingIndex
+            ];
 
         const evidenceTarget =
-          exploratoryFinding.evidenceTarget;
+          exploratoryFinding
+            .evidenceTarget;
 
         if (
-          evidenceTarget === null
+          evidenceTarget ===
+          null
         ) {
           continue;
         }
@@ -325,7 +403,9 @@ async function main(): Promise<void> {
             );
 
             break;
-          } catch (error: unknown) {
+          } catch (
+            error: unknown
+          ) {
             console.warn(
               '\nTargeted evidence capture failed. Falling back if necessary.'
             );
@@ -338,12 +418,19 @@ async function main(): Promise<void> {
       }
 
       const shouldCaptureFallbackScreenshot =
-        screenshotPath === null &&
+        screenshotPath ===
+          null &&
         (
-          findings.length > 0 ||
-          actionableDiagnosticsCount > 0 ||
-          diagnosticsNeedingReviewCount > 0 ||
-          exploratoryQaAnalysis.findings.length > 0
+          findings.length >
+            0 ||
+          actionableDiagnosticsCount >
+            0 ||
+          diagnosticsNeedingReviewCount >
+            0 ||
+          exploratoryQaAnalysis
+            .findings
+            .length >
+            0
         );
 
       if (
@@ -369,14 +456,16 @@ async function main(): Promise<void> {
       }
 
       if (
-        screenshotPath === null
+        screenshotPath ===
+        null
       ) {
         console.log(
           '\nScreenshot evidence: not required.'
         );
       }
 
-      const report: SiteAgentReport = {
+      const report:
+        SiteAgentReport = {
         runId,
 
         startedAt:
@@ -386,16 +475,23 @@ async function main(): Promise<void> {
           new Date().toISOString(),
 
         site: {
-          id: site.id,
-          name: site.name,
-          startUrl: site.startUrl
+          id:
+            site.id,
+
+          name:
+            site.name,
+
+          startUrl:
+            site.startUrl
         },
 
         homepage:
           homepageObservation,
 
         outcome: {
-          type: 'completed',
+          type:
+            'completed',
+
           summary:
             'Completed single-page real-site exploratory QA integration check.'
         },
@@ -421,12 +517,16 @@ async function main(): Promise<void> {
 
             findings,
 
-            exploratoryQaAnalysis
+            exploratoryQaAnalysis,
+
+            exploratoryInvestigation:
+              null
           }
         ],
 
         summary: {
-          pagesInspected: 1,
+          pagesInspected:
+            1,
 
           findingsCount:
             findings.length,
@@ -437,11 +537,14 @@ async function main(): Promise<void> {
             ),
 
           exploratoryQaFindingsCount:
-            exploratoryQaAnalysis.findings.length,
+            exploratoryQaAnalysis
+              .findings
+              .length,
 
           highestExploratoryQaSeverity:
             getHighestExploratoryQaSeverity(
-              exploratoryQaAnalysis.findings
+              exploratoryQaAnalysis
+                .findings
             ),
 
           actionableDiagnosticsCount,
@@ -492,6 +595,7 @@ main().catch(
       error
     );
 
-    process.exitCode = 1;
+    process.exitCode =
+      1;
   }
 );

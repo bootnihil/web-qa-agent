@@ -1,6 +1,15 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import type { SiteAgentReport } from './report-types';
+import {
+  mkdir,
+  writeFile
+} from 'node:fs/promises';
+
+import {
+  join
+} from 'node:path';
+
+import type {
+  SiteAgentReport
+} from './report-types';
 
 export interface WrittenMarkdownReport {
   directoryPath: string;
@@ -18,15 +27,17 @@ function formatStatus(
 export async function writeMarkdownReport(
   report: SiteAgentReport
 ): Promise<WrittenMarkdownReport> {
-  const directoryPath = join(
-    'agent-results',
-    report.runId
-  );
+  const directoryPath =
+    join(
+      'agent-results',
+      report.runId
+    );
 
-  const filePath = join(
-    directoryPath,
-    'report.md'
-  );
+  const filePath =
+    join(
+      directoryPath,
+      'report.md'
+    );
 
   const lines: string[] = [
     '# Web QA Agent Report',
@@ -59,7 +70,8 @@ export async function writeMarkdownReport(
   ];
 
   if (
-    report.inspectedPages.length === 0
+    report.inspectedPages.length ===
+    0
   ) {
     lines.push(
       '## Inspected Pages',
@@ -70,7 +82,10 @@ export async function writeMarkdownReport(
   }
 
   report.inspectedPages.forEach(
-    (pageResult, index) => {
+    (
+      pageResult,
+      index
+    ) => {
       const pageNumber =
         index + 1;
 
@@ -81,14 +96,15 @@ export async function writeMarkdownReport(
         classifiedDiagnostics,
         screenshotPath,
         findings,
-        exploratoryQaAnalysis
+        exploratoryQaAnalysis,
+        exploratoryInvestigation
       } = pageResult;
 
       const actionableCount =
         classifiedDiagnostics
           .failedRequests
           .filter(
-            (item) =>
+            item =>
               item.disposition ===
               'actionable'
           )
@@ -98,7 +114,7 @@ export async function writeMarkdownReport(
         classifiedDiagnostics
           .failedRequests
           .filter(
-            (item) =>
+            item =>
               item.disposition ===
               'needs-review'
           )
@@ -108,7 +124,7 @@ export async function writeMarkdownReport(
         classifiedDiagnostics
           .failedRequests
           .filter(
-            (item) =>
+            item =>
               item.disposition ===
               'ignored-noise'
           )
@@ -144,14 +160,16 @@ export async function writeMarkdownReport(
         );
       } else {
         observation.headings.forEach(
-          (heading) => {
+          heading => {
             lines.push(
               `- ${heading}`
             );
           }
         );
 
-        lines.push('');
+        lines.push(
+          ''
+        );
       }
 
       lines.push(
@@ -171,10 +189,11 @@ export async function writeMarkdownReport(
       );
 
       if (
-        screenshotPath === null
+        screenshotPath ===
+        null
       ) {
         lines.push(
-          'No screenshot was captured because no finding or review-worthy diagnostic triggered evidence collection.',
+          'No screenshot was captured because no finding, autonomous action, or review-worthy diagnostic triggered evidence collection.',
           ''
         );
       } else {
@@ -191,7 +210,8 @@ export async function writeMarkdownReport(
 
       if (
         diagnostics.consoleErrors
-          .length === 0
+          .length ===
+        0
       ) {
         lines.push(
           'No browser console errors were recorded.',
@@ -223,7 +243,9 @@ export async function writeMarkdownReport(
 
       if (
         classifiedDiagnostics
-          .failedRequests.length === 0
+          .failedRequests
+          .length ===
+        0
       ) {
         lines.push(
           'No failed network requests were recorded.',
@@ -265,30 +287,34 @@ export async function writeMarkdownReport(
       );
 
       if (
-        diagnostics.failedRequests
-          .length === 0
+        diagnostics
+          .failedRequests
+          .length ===
+        0
       ) {
         lines.push(
           'No failed network requests were recorded.',
           ''
         );
       } else {
-        diagnostics.failedRequests.forEach(
-          (
-            failedRequest,
-            requestIndex
-          ) => {
-            lines.push(
-              `**Raw failed request ${requestIndex + 1}**`,
-              '',
-              `- URL: ${failedRequest.url}`,
-              `- Method: ${failedRequest.method}`,
-              `- Resource type: ${failedRequest.resourceType}`,
-              `- Failure: ${failedRequest.failureText}`,
-              ''
-            );
-          }
-        );
+        diagnostics
+          .failedRequests
+          .forEach(
+            (
+              failedRequest,
+              requestIndex
+            ) => {
+              lines.push(
+                `**Raw failed request ${requestIndex + 1}**`,
+                '',
+                `- URL: ${failedRequest.url}`,
+                `- Method: ${failedRequest.method}`,
+                `- Resource type: ${failedRequest.resourceType}`,
+                `- Failure: ${failedRequest.failureText}`,
+                ''
+              );
+            }
+          );
       }
 
       lines.push(
@@ -297,7 +323,8 @@ export async function writeMarkdownReport(
       );
 
       if (
-        findings.length === 0
+        findings.length ===
+        0
       ) {
         lines.push(
           'No rule-based page health issues were detected.',
@@ -305,7 +332,7 @@ export async function writeMarkdownReport(
         );
       } else {
         findings.forEach(
-          (finding) => {
+          finding => {
             lines.push(
               `#### ${finding.severity.toUpperCase()} — ${finding.title}`,
               '',
@@ -327,7 +354,9 @@ export async function writeMarkdownReport(
 
       if (
         exploratoryQaAnalysis
-          .findings.length === 0
+          .findings
+          .length ===
+        0
       ) {
         lines.push(
           'No evidence-grounded exploratory QA candidate issues were identified.',
@@ -355,13 +384,78 @@ export async function writeMarkdownReport(
             }
           );
       }
+
+      /*
+       * Autonomous investigation is kept separate from the original
+       * exploratory analysis.
+       *
+       * Analysis answers:
+       *   "What looked suspicious?"
+       *
+       * Investigation answers:
+       *   "What did the agent actually do about it?"
+       */
+      lines.push(
+        '### Autonomous Investigation',
+        ''
+      );
+
+      if (
+        exploratoryInvestigation ===
+        null
+      ) {
+        lines.push(
+          'No autonomous investigation was performed on this page.',
+          ''
+        );
+      } else {
+        lines.push(
+          `- Page URL: ${exploratoryInvestigation.pageUrl}`,
+          `- Maximum allowed steps: ${exploratoryInvestigation.maxSteps}`,
+          `- Completed steps: ${exploratoryInvestigation.completedSteps}`,
+          `- Stop reason: ${exploratoryInvestigation.stopReason}`,
+          ''
+        );
+
+        if (
+          exploratoryInvestigation
+            .steps
+            .length ===
+          0
+        ) {
+          lines.push(
+            'The autonomous planner completed without recording any investigation steps.',
+            ''
+          );
+        } else {
+          exploratoryInvestigation
+            .steps
+            .forEach(
+              step => {
+                lines.push(
+                  `#### Investigation Step ${step.step}`,
+                  '',
+                  `- Hypothesis: ${step.decision.hypothesis}`,
+                  `- Reasoning: ${step.decision.reasoning}`,
+                  `- Requested action: \`${step.decision.action.kind}\``,
+                  `- Action details: \`${JSON.stringify(step.decision.action)}\``,
+                  `- Expected observation: ${step.decision.expectedObservation}`,
+                  `- Execution status: ${step.executionResult.status}`,
+                  `- Execution detail: ${step.executionResult.detail}`,
+                  ''
+                );
+              }
+            );
+        }
+      }
     }
   );
 
   await mkdir(
     directoryPath,
     {
-      recursive: true
+      recursive:
+        true
     }
   );
 
