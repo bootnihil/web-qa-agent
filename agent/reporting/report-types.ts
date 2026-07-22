@@ -26,6 +26,10 @@ import type {
   ExploratoryLoopResult
 } from '../planning/run-exploratory-loop';
 
+import type {
+  SiteWideExploratoryFinding
+} from './build-site-wide-exploratory-findings';
+
 export interface HomepageObservation {
   requestedUrl: string;
   finalUrl: string;
@@ -108,8 +112,23 @@ export interface SiteAgentReport {
 
   outcome: AgentRunOutcome;
 
+  /*
+   * Full page-by-page observations and findings.
+   *
+   * These remain the source of truth for everything
+   * the agent observed on each individual page.
+   */
   inspectedPages:
     InspectedPageResult[];
+
+  /*
+   * Deterministically grouped exploratory findings
+   * representing the site-wide QA view.
+   *
+   * The original page-level findings are not removed.
+   */
+  siteWideExploratoryFindings:
+    SiteWideExploratoryFinding[];
 
   summary: {
     pagesInspected: number;
@@ -122,7 +141,18 @@ export interface SiteAgentReport {
       | 'low'
       | 'none';
 
+    /*
+     * Total number of original exploratory findings,
+     * including repeated occurrences across pages.
+     */
     exploratoryQaFindingsCount: number;
+
+    /*
+     * Number of unique site-wide exploratory findings
+     * after deterministic deduplication.
+     */
+    siteWideExploratoryFindingsCount:
+      number;
 
     highestExploratoryQaSeverity:
       | 'high'

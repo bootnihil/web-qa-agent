@@ -20,6 +20,10 @@ import type {
   PageDiagnostics
 } from './browser/collect-page-diagnostics';
 
+import {
+  buildSiteWideExploratoryFindings
+} from './reporting/build-site-wide-exploratory-findings';
+
 import type {
   SiteAgentReport
 } from './reporting/report-types';
@@ -168,6 +172,30 @@ async function main(): Promise<void> {
         screenshot.filePath;
     }
 
+    /*
+     * Build the same site-wide exploratory finding view used
+     * by real agent runs.
+     *
+     * This synthetic check has no exploratory findings, so the
+     * resulting collection should be empty.
+     */
+    const siteWideExploratoryFindings =
+      buildSiteWideExploratoryFindings([
+        {
+          pageUrl:
+            'https://example.com/review-page',
+
+          pageTitle:
+            'Review-Worthy Diagnostics Test',
+
+          screenshotPath,
+
+          findings:
+            exploratoryQaAnalysis
+              .findings
+        }
+      ]);
+
     const startedAt =
       new Date();
 
@@ -262,6 +290,8 @@ async function main(): Promise<void> {
           }
         ],
 
+        siteWideExploratoryFindings,
+
         summary: {
           pagesInspected:
             1,
@@ -275,6 +305,10 @@ async function main(): Promise<void> {
           exploratoryQaFindingsCount:
             exploratoryQaAnalysis
               .findings
+              .length,
+
+          siteWideExploratoryFindingsCount:
+            siteWideExploratoryFindings
               .length,
 
           highestExploratoryQaSeverity:

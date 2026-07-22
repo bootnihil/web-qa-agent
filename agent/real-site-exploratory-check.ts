@@ -16,6 +16,10 @@ import { inspectNavigation } from './browser/inspect-navigation';
 import { visitApprovedLink } from './browser/visit-approved-link';
 
 import {
+  buildSiteWideExploratoryFindings
+} from './reporting/build-site-wide-exploratory-findings';
+
+import {
   createRunId,
   getHighestSeverity
 } from './reporting/report-utils';
@@ -464,6 +468,32 @@ async function main(): Promise<void> {
         );
       }
 
+      /*
+       * Produce the same run-level deduplicated view used
+       * by the full multi-page autonomous agent.
+       *
+       * This check inspects only one page, but using the same
+       * builder keeps the report contract and behavior aligned.
+       */
+      const siteWideExploratoryFindings =
+        buildSiteWideExploratoryFindings([
+          {
+            pageUrl:
+              pageObservation
+                .finalUrl,
+
+            pageTitle:
+              pageObservation
+                .title,
+
+            screenshotPath,
+
+            findings:
+              exploratoryQaAnalysis
+                .findings
+          }
+        ]);
+
       const report:
         SiteAgentReport = {
         runId,
@@ -524,6 +554,8 @@ async function main(): Promise<void> {
           }
         ],
 
+        siteWideExploratoryFindings,
+
         summary: {
           pagesInspected:
             1,
@@ -539,6 +571,10 @@ async function main(): Promise<void> {
           exploratoryQaFindingsCount:
             exploratoryQaAnalysis
               .findings
+              .length,
+
+          siteWideExploratoryFindingsCount:
+            siteWideExploratoryFindings
               .length,
 
           highestExploratoryQaSeverity:

@@ -52,7 +52,8 @@ export async function writeMarkdownReport(
     `- Pages inspected: ${report.summary.pagesInspected}`,
     `- Rule-based findings: ${report.summary.findingsCount}`,
     `- Highest rule-based finding severity: ${report.summary.highestSeverity}`,
-    `- Exploratory QA candidate findings: ${report.summary.exploratoryQaFindingsCount}`,
+    `- Exploratory QA candidate occurrences: ${report.summary.exploratoryQaFindingsCount}`,
+    `- Unique site-wide exploratory findings: ${report.summary.siteWideExploratoryFindingsCount}`,
     `- Highest exploratory QA severity: ${report.summary.highestExploratoryQaSeverity}`,
     `- Actionable diagnostics: ${report.summary.actionableDiagnosticsCount}`,
     `- Diagnostics needing review: ${report.summary.diagnosticsNeedingReviewCount}`,
@@ -60,6 +61,71 @@ export async function writeMarkdownReport(
     `- Outcome: ${report.outcome.type}`,
     `- Outcome summary: ${report.outcome.summary}`,
     '',
+    '## Site-Wide Exploratory Findings',
+    ''
+  ];
+
+  if (
+    report
+      .siteWideExploratoryFindings
+      .length ===
+    0
+  ) {
+    lines.push(
+      'No site-wide exploratory QA candidate issues were identified.',
+      ''
+    );
+  } else {
+    report
+      .siteWideExploratoryFindings
+      .forEach(
+        (
+          siteWideFinding,
+          siteWideFindingIndex
+        ) => {
+          const {
+            fingerprint,
+            representativeFinding,
+            occurrenceCount,
+            affectedPageCount,
+            occurrences
+          } =
+            siteWideFinding;
+
+          lines.push(
+            `### Finding ${siteWideFindingIndex + 1}: ${representativeFinding.severity.toUpperCase()} - ${representativeFinding.title}`,
+            '',
+            `- Category: ${representativeFinding.category}`,
+            `- Severity: ${representativeFinding.severity}`,
+            `- Confidence: ${representativeFinding.confidence}`,
+            `- Occurrences: ${occurrenceCount}`,
+            `- Affected pages: ${affectedPageCount}`,
+            `- Fingerprint: \`${fingerprint}\``,
+            `- Representative evidence: ${representativeFinding.evidence}`,
+            `- Reasoning: ${representativeFinding.reasoning}`,
+            `- Suggested check: ${representativeFinding.suggestedCheck}`,
+            '',
+            '#### Observed On',
+            ''
+          );
+
+          occurrences.forEach(
+            occurrence => {
+              lines.push(
+                `**Page ${occurrence.pageNumber}, finding ${occurrence.findingNumber}**`,
+                '',
+                `- Page title: ${occurrence.pageTitle || '(empty)'}`,
+                `- URL: ${occurrence.pageUrl}`,
+                `- Screenshot: ${occurrence.screenshotPath ?? 'Not captured'}`,
+                ''
+              );
+            }
+          );
+        }
+      );
+  }
+
+  lines.push(
     '## Homepage',
     '',
     `- Requested URL: ${report.homepage.requestedUrl}`,
@@ -67,7 +133,7 @@ export async function writeMarkdownReport(
     `- HTTP status: ${formatStatus(report.homepage.httpStatus)}`,
     `- Title: ${report.homepage.title || '(empty)'}`,
     ''
-  ];
+  );
 
   if (
     report.inspectedPages.length ===
@@ -334,7 +400,7 @@ export async function writeMarkdownReport(
         findings.forEach(
           finding => {
             lines.push(
-              `#### ${finding.severity.toUpperCase()} — ${finding.title}`,
+              `#### ${finding.severity.toUpperCase()} - ${finding.title}`,
               '',
               `- Code: ${finding.code}`,
               `- URL: ${finding.url}`,
@@ -371,7 +437,7 @@ export async function writeMarkdownReport(
               findingIndex
             ) => {
               lines.push(
-                `#### Candidate ${findingIndex + 1}: ${finding.severity.toUpperCase()} — ${finding.title}`,
+                `#### Candidate ${findingIndex + 1}: ${finding.severity.toUpperCase()} - ${finding.title}`,
                 '',
                 `- Category: ${finding.category}`,
                 `- Severity: ${finding.severity}`,

@@ -1,0 +1,206 @@
+import type {
+  ExploratoryQaFinding
+} from './analysis/exploratory-qa-schema';
+
+import {
+  buildSiteWideExploratoryFindings
+} from './reporting/build-site-wide-exploratory-findings';
+
+function createCountryFinding(
+  title: string,
+  controlLabel: string | null,
+  controlName: string | null
+): ExploratoryQaFinding {
+  return {
+    category:
+      'content',
+
+    severity:
+      'low',
+
+    confidence:
+      'high',
+
+    title,
+
+    evidence:
+      'The country dropdown contains both "Ecuador" and "Equador".',
+
+    reasoning:
+      'Equador appears to be a misspelling of Ecuador.',
+
+    suggestedCheck:
+      'Confirm whether both options are selectable.',
+
+    evidenceTarget: {
+      kind:
+        'select-option',
+
+      controlLabel,
+
+      controlName,
+
+      controlId:
+        null,
+
+      optionText:
+        'Equador'
+    }
+  };
+}
+
+function main(): void {
+  const siteWideFindings =
+    buildSiteWideExploratoryFindings([
+      {
+        pageUrl:
+          'https://example.com/radiology',
+
+        pageTitle:
+          'Radiology',
+
+        screenshotPath:
+          'page-01.png',
+
+        findings: [
+          createCountryFinding(
+            'Misspelled country name in selection list',
+            'COUNTRY*',
+            'country'
+          )
+        ]
+      },
+      {
+        pageUrl:
+          'https://example.com/platform',
+
+        pageTitle:
+          'Platform',
+
+        screenshotPath:
+          'page-02.png',
+
+        findings: [
+          createCountryFinding(
+            'Misspelled country name in registration form',
+            'Country',
+            'country'
+          )
+        ]
+      },
+      {
+        pageUrl:
+          'https://example.com/solutions',
+
+        pageTitle:
+          'Solutions',
+
+        screenshotPath:
+          'page-03.png',
+
+        findings: [
+          createCountryFinding(
+            'Misspelled country option in form',
+            null,
+            'country'
+          ),
+
+          {
+            category:
+              'content',
+
+            severity:
+              'medium',
+
+            confidence:
+              'high',
+
+            title:
+              'Broken product heading',
+
+            evidence:
+              'The heading contains repeated text.',
+
+            reasoning:
+              'Repeated words reduce content quality.',
+
+            suggestedCheck:
+              'Review the heading copy.',
+
+            evidenceTarget:
+              null
+          }
+        ]
+      }
+    ]);
+
+  if (
+    siteWideFindings.length !==
+    2
+  ) {
+    throw new Error(
+      `Expected 2 site-wide findings, received ${siteWideFindings.length}.`
+    );
+  }
+
+  const countryFinding =
+    siteWideFindings.find(
+      finding =>
+        finding.fingerprint ===
+        'target|content|select-option|country|equador'
+    );
+
+  if (
+    !countryFinding
+  ) {
+    throw new Error(
+      'The repeated country-option issue was not grouped under the expected fingerprint.'
+    );
+  }
+
+  if (
+    countryFinding.occurrenceCount !==
+    3
+  ) {
+    throw new Error(
+      `Expected 3 country finding occurrences, received ${countryFinding.occurrenceCount}.`
+    );
+  }
+
+  if (
+    countryFinding.affectedPageCount !==
+    3
+  ) {
+    throw new Error(
+      `Expected 3 affected pages, received ${countryFinding.affectedPageCount}.`
+    );
+  }
+
+  if (
+    countryFinding.occurrences
+      .map(
+        occurrence =>
+          occurrence.pageNumber
+      )
+      .join(',') !==
+    '1,2,3'
+  ) {
+    throw new Error(
+      'The grouped occurrences do not point back to the expected inspected pages.'
+    );
+  }
+
+  console.log(
+    'Site-wide exploratory finding grouping passed.'
+  );
+
+  console.log(
+    JSON.stringify(
+      siteWideFindings,
+      null,
+      2
+    )
+  );
+}
+
+main();

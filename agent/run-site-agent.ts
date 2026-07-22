@@ -29,6 +29,10 @@ import {
 import { runExploratoryLoop } from './planning/run-exploratory-loop';
 
 import {
+  buildSiteWideExploratoryFindings
+} from './reporting/build-site-wide-exploratory-findings';
+
+import {
   createRunId,
   getHighestSeverity
 } from './reporting/report-utils';
@@ -902,6 +906,36 @@ async function main(): Promise<void> {
               .findings
         );
 
+      /*
+       * Build a deterministic site-wide view of exploratory
+       * findings while retaining all original page-level data.
+       */
+      const siteWideExploratoryFindings =
+        buildSiteWideExploratoryFindings(
+          inspectedPages.map(
+            pageResult => ({
+              pageUrl:
+                pageResult
+                  .observation
+                  .finalUrl,
+
+              pageTitle:
+                pageResult
+                  .observation
+                  .title,
+
+              screenshotPath:
+                pageResult
+                  .screenshotPath,
+
+              findings:
+                pageResult
+                  .exploratoryQaAnalysis
+                  .findings
+            })
+          )
+        );
+
       const allClassifiedFailedRequests =
         inspectedPages.flatMap(
           pageResult =>
@@ -965,6 +999,8 @@ async function main(): Promise<void> {
 
         inspectedPages,
 
+        siteWideExploratoryFindings,
+
         summary: {
           pagesInspected:
             inspectedPages.length,
@@ -979,6 +1015,9 @@ async function main(): Promise<void> {
 
           exploratoryQaFindingsCount:
             allExploratoryQaFindings.length,
+
+          siteWideExploratoryFindingsCount:
+            siteWideExploratoryFindings.length,
 
           highestExploratoryQaSeverity:
             getHighestExploratoryQaSeverity(
