@@ -8,6 +8,9 @@ export interface AgentRunOptions {
   pages:
     number | null;
 
+  navigationSteps:
+    number | null;
+
   exploratoryStepsPerPage:
     number | null;
 }
@@ -19,6 +22,14 @@ export const agentRunOptionLimits = {
 
     maximum:
       20
+  },
+
+  navigationSteps: {
+    minimum:
+      1,
+
+    maximum:
+      50
   },
 
   exploratoryStepsPerPage: {
@@ -100,6 +111,10 @@ export function parseAgentRunOptions(
     number | null =
       null;
 
+  let navigationSteps:
+    number | null =
+      null;
+
   let exploratoryStepsPerPage:
     number | null =
       null;
@@ -150,6 +165,39 @@ export function parseAgentRunOptions(
 
     if (
       argument ===
+      '--navigation-steps'
+    ) {
+      if (
+        navigationSteps !==
+        null
+      ) {
+        throw new Error(
+          'The --navigation-steps option may be supplied only once.'
+        );
+      }
+
+      navigationSteps =
+        parseBoundedInteger(
+          '--navigation-steps',
+          args[
+            argumentIndex + 1
+          ],
+          agentRunOptionLimits
+            .navigationSteps
+            .minimum,
+          agentRunOptionLimits
+            .navigationSteps
+            .maximum
+        );
+
+      argumentIndex +=
+        1;
+
+      continue;
+    }
+
+    if (
+      argument ===
       '--steps-per-page'
     ) {
       if (
@@ -187,7 +235,7 @@ export function parseAgentRunOptions(
       )
     ) {
       throw new Error(
-        `Unknown command-line option "${argument}". Supported options are --pages and --steps-per-page.`
+        `Unknown command-line option "${argument}". Supported options are --pages, --navigation-steps, and --steps-per-page.`
       );
     }
 
@@ -214,6 +262,8 @@ export function parseAgentRunOptions(
 
     pages,
 
+    navigationSteps,
+
     exploratoryStepsPerPage
   };
 }
@@ -228,23 +278,27 @@ export function applyAgentRunOptions(
     options.pages ??
     baseSite.maxPages;
 
+  /*
+   * When the user explicitly supplies a navigation budget,
+   * preserve it exactly.
+   *
+   * Otherwise retain the existing convenience behavior:
+   * raising the page limit also raises the navigation budget
+   * when necessary.
+   */
+  const maxAgentSteps =
+    options.navigationSteps ??
+    Math.max(
+      baseSite.maxAgentSteps,
+      maxPages
+    );
+
   return {
     ...baseSite,
 
     maxPages,
 
-    /*
-     * Each inspected page normally requires one site-level
-     * navigation decision.
-     *
-     * Raising the page limit must therefore also raise the
-     * navigation budget when the original budget is smaller.
-     */
-    maxAgentSteps:
-      Math.max(
-        baseSite.maxAgentSteps,
-        maxPages
-      ),
+    maxAgentSteps,
 
     maxExploratoryStepsPerPage:
       options

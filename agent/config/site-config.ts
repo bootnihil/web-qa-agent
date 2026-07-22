@@ -11,16 +11,19 @@ export interface SiteConfig {
   maxPages: number;
 
   /*
-   * Existing upper bound on multi-page agent/navigation decisions.
+   * Maximum number of site-level navigation decisions the
+   * agent may perform during one exploration run.
    *
-   * This will later be renamed to maxNavigationSteps when the
-   * multi-page autonomous integration is completed.
+   * The internal property retains its historical
+   * maxAgentSteps name for now. The user-facing CLI exposes
+   * this more clearly as --navigation-steps.
    */
   maxAgentSteps: number;
 
   /*
-   * Maximum number of autonomous exploratory actions the planner
-   * may perform while investigating one already-open page.
+   * Maximum number of autonomous exploratory actions the
+   * planner may perform while investigating one already-open
+   * page.
    */
   maxExploratoryStepsPerPage: number;
 

@@ -80,6 +80,8 @@ function main(): void {
       'aidoc' ||
     defaults.pages !==
       null ||
+    defaults.navigationSteps !==
+      null ||
     defaults.exploratoryStepsPerPage !==
       null
   ) {
@@ -93,6 +95,8 @@ function main(): void {
       'https://example.com/',
       '--pages',
       '7',
+      '--navigation-steps',
+      '9',
       '--steps-per-page',
       '4'
     ]);
@@ -112,6 +116,15 @@ function main(): void {
   ) {
     throw new Error(
       'The --pages value was not parsed correctly.'
+    );
+  }
+
+  if (
+    parsed.navigationSteps !==
+    9
+  ) {
+    throw new Error(
+      'The --navigation-steps value was not parsed correctly.'
     );
   }
 
@@ -141,10 +154,10 @@ function main(): void {
 
   if (
     overriddenSite.maxAgentSteps !==
-    7
+    9
   ) {
     throw new Error(
-      'The navigation budget was not raised to support the requested page limit.'
+      'The explicit navigation-step override was not applied correctly.'
     );
   }
 
@@ -155,6 +168,59 @@ function main(): void {
   ) {
     throw new Error(
       'The exploratory step override was not applied correctly.'
+    );
+  }
+
+  /*
+   * Preserve the original behavior when --pages is supplied
+   * without an explicit navigation-step override.
+   */
+  const pagesOnly =
+    applyAgentRunOptions(
+      baseSite,
+      parseAgentRunOptions([
+        'synthetic',
+        '--pages',
+        '7'
+      ])
+    );
+
+  if (
+    pagesOnly.maxPages !==
+      7 ||
+    pagesOnly.maxAgentSteps !==
+      7
+  ) {
+    throw new Error(
+      'The navigation budget was not automatically raised to support the requested page limit.'
+    );
+  }
+
+  /*
+   * An explicitly supplied navigation budget is independent
+   * from the page limit.
+   *
+   * This allows the user to intentionally stop navigation
+   * before the page ceiling is reached.
+   */
+  const navigationOnly =
+    applyAgentRunOptions(
+      baseSite,
+      parseAgentRunOptions([
+        'synthetic',
+        '--navigation-steps',
+        '2'
+      ])
+    );
+
+  if (
+    navigationOnly.maxPages !==
+      3 ||
+    navigationOnly.maxAgentSteps !==
+      2
+  ) {
+    throw new Error(
+      'The navigation-only override was not applied correctly.'
     );
   }
 
@@ -203,11 +269,32 @@ function main(): void {
   );
 
   expectError(
+    'Missing navigation steps value',
+    () =>
+      parseAgentRunOptions([
+        'aidoc',
+        '--navigation-steps'
+      ]),
+    'Missing value after --navigation-steps'
+  );
+
+  expectError(
     'Decimal pages value',
     () =>
       parseAgentRunOptions([
         'aidoc',
         '--pages',
+        '3.5'
+      ]),
+    'Expected a whole number'
+  );
+
+  expectError(
+    'Decimal navigation steps value',
+    () =>
+      parseAgentRunOptions([
+        'aidoc',
+        '--navigation-steps',
         '3.5'
       ]),
     'Expected a whole number'
@@ -246,6 +333,38 @@ function main(): void {
   );
 
   expectError(
+    'Navigation steps below minimum',
+    () =>
+      parseAgentRunOptions([
+        'aidoc',
+        '--navigation-steps',
+        String(
+          agentRunOptionLimits
+            .navigationSteps
+            .minimum -
+          1
+        )
+      ]),
+    'must be from'
+  );
+
+  expectError(
+    'Navigation steps above maximum',
+    () =>
+      parseAgentRunOptions([
+        'aidoc',
+        '--navigation-steps',
+        String(
+          agentRunOptionLimits
+            .navigationSteps
+            .maximum +
+          1
+        )
+      ]),
+    'must be from'
+  );
+
+  expectError(
     'Exploratory steps above maximum',
     () =>
       parseAgentRunOptions([
@@ -270,6 +389,32 @@ function main(): void {
         '3',
         '--pages',
         '4'
+      ]),
+    'may be supplied only once'
+  );
+
+  expectError(
+    'Duplicate navigation steps option',
+    () =>
+      parseAgentRunOptions([
+        'aidoc',
+        '--navigation-steps',
+        '4',
+        '--navigation-steps',
+        '5'
+      ]),
+    'may be supplied only once'
+  );
+
+  expectError(
+    'Duplicate exploratory steps option',
+    () =>
+      parseAgentRunOptions([
+        'aidoc',
+        '--steps-per-page',
+        '2',
+        '--steps-per-page',
+        '3'
       ]),
     'may be supplied only once'
   );
@@ -304,6 +449,8 @@ function main(): void {
       {
         parsed,
         overriddenSite,
+        pagesOnly,
+        navigationOnly,
         analysisOnly
       },
       null,
