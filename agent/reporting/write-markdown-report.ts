@@ -8,6 +8,10 @@ import {
 } from 'node:path';
 
 import type {
+  FindingInvestigationStatus
+} from '../investigation/evaluate-finding-investigation-outcome';
+
+import type {
   SiteAgentReport
 } from './report-types';
 
@@ -16,12 +20,271 @@ export interface WrittenMarkdownReport {
   filePath: string;
 }
 
-function formatStatus(
+function formatHttpStatus(
   status: number | null
 ): string {
   return status === null
     ? 'Unknown'
     : String(status);
+}
+
+function formatInvestigationStatus(
+  status:
+    FindingInvestigationStatus
+): string {
+  if (
+    status ===
+    'not-verified'
+  ) {
+    return 'NOT VERIFIED';
+  }
+
+  return status.toUpperCase();
+}
+
+function formatSeverity(
+  severity: string
+): string {
+  return severity.toUpperCase();
+}
+
+function formatConfidence(
+  confidence: string
+): string {
+  if (
+    confidence.length ===
+    0
+  ) {
+    return confidence;
+  }
+
+  return (
+    confidence.charAt(0).toUpperCase() +
+    confidence.slice(1)
+  );
+}
+
+function escapeTableCell(
+  value: string
+): string {
+  return value
+    .replace(
+      /\|/g,
+      '\\|'
+    )
+    .replace(
+      /\r?\n/g,
+      ' '
+    );
+}
+
+function createPageLink(
+  title: string,
+  url: string
+): string {
+  const displayTitle =
+    title.trim().length >
+    0
+      ? title
+      : url;
+
+  return (
+    `[${escapeTableCell(displayTitle)}](${url})`
+  );
+}
+
+function createScreenshotLink(
+  screenshotPath:
+    string | null
+): string {
+  if (
+    screenshotPath ===
+    null
+  ) {
+    return 'Not captured';
+  }
+
+  const parts =
+    screenshotPath.split(
+      /[\\/]/
+    );
+
+  const filename =
+    parts.at(-1);
+
+  if (
+    !filename
+  ) {
+    return escapeTableCell(
+      screenshotPath
+    );
+  }
+
+  return (
+    `[${escapeTableCell(filename)}](evidence/${filename})`
+  );
+}
+
+function getOccurrenceOutcome(
+  report: SiteAgentReport,
+  pageNumber: number,
+  findingNumber: number
+) {
+  const page =
+    report.inspectedPages[
+      pageNumber - 1
+    ];
+
+  if (
+    !page
+  ) {
+    return null;
+  }
+
+  const result =
+    page
+      .exploratoryFindingResults[
+        findingNumber - 1
+      ];
+
+  return (
+    result?.outcome ??
+    null
+  );
+}
+
+function summarizeInvestigationStatuses(
+  statuses:
+    FindingInvestigationStatus[]
+): string {
+  if (
+    statuses.length ===
+    0
+  ) {
+    return 'NOT INVESTIGATED';
+  }
+
+  const uniqueStatuses =
+    new Set(
+      statuses
+    );
+
+  if (
+    uniqueStatuses.size ===
+    1
+  ) {
+    return formatInvestigationStatus(
+      statuses[0]
+    );
+  }
+
+  const verifiedCount =
+    statuses.filter(
+      status =>
+        status ===
+        'verified'
+    ).length;
+
+  const notVerifiedCount =
+    statuses.filter(
+      status =>
+        status ===
+        'not-verified'
+    ).length;
+
+  const inconclusiveCount =
+    statuses.filter(
+      status =>
+        status ===
+        'inconclusive'
+    ).length;
+
+  const parts: string[] = [];
+
+  if (
+    verifiedCount >
+    0
+  ) {
+    parts.push(
+      `${verifiedCount} verified`
+    );
+  }
+
+  if (
+    notVerifiedCount >
+    0
+  ) {
+    parts.push(
+      `${notVerifiedCount} not verified`
+    );
+  }
+
+  if (
+    inconclusiveCount >
+    0
+  ) {
+    parts.push(
+      `${inconclusiveCount} inconclusive`
+    );
+  }
+
+  return (
+    `MIXED (${parts.join(', ')})`
+  );
+}
+
+function getPageTechnicalStatus(
+  report:
+    SiteAgentReport,
+  pageIndex:
+    number
+): string {
+  const page =
+    report.inspectedPages[
+      pageIndex
+    ];
+
+  const actionableCount =
+    page
+      .classifiedDiagnostics
+      .failedRequests
+      .filter(
+        item =>
+          item.disposition ===
+          'actionable'
+      )
+      .length;
+
+  const needsReviewCount =
+    page
+      .classifiedDiagnostics
+      .failedRequests
+      .filter(
+        item =>
+          item.disposition ===
+          'needs-review'
+      )
+      .length;
+
+  if (
+    actionableCount >
+    0
+  ) {
+    return (
+      `ACTIONABLE (${actionableCount})`
+    );
+  }
+
+  if (
+    needsReviewCount >
+    0
+  ) {
+    return (
+      `REVIEW (${needsReviewCount})`
+    );
+  }
+
+  return 'OK';
 }
 
 export async function writeMarkdownReport(
@@ -42,26 +305,28 @@ export async function writeMarkdownReport(
   const lines: string[] = [
     '# CheckQuest Report',
     '',
-    `**Site:** ${report.site.name}`,
-    `**Run ID:** ${report.runId}`,
-    `**Started:** ${report.startedAt}`,
+    `**Site:** ${report.site.name}  `,
+    `**Start URL:** ${report.site.startUrl}  `,
+    `**Run ID:** ${report.runId}  `,
+    `**Started:** ${report.startedAt}  `,
     `**Finished:** ${report.finishedAt}`,
     '',
     '## Summary',
     '',
-    `- Pages inspected: ${report.summary.pagesInspected}`,
-    `- Rule-based findings: ${report.summary.findingsCount}`,
-    `- Highest rule-based finding severity: ${report.summary.highestSeverity}`,
-    `- Exploratory QA candidate occurrences: ${report.summary.exploratoryQaFindingsCount}`,
-    `- Unique site-wide exploratory findings: ${report.summary.siteWideExploratoryFindingsCount}`,
-    `- Highest exploratory QA severity: ${report.summary.highestExploratoryQaSeverity}`,
-    `- Actionable diagnostics: ${report.summary.actionableDiagnosticsCount}`,
-    `- Diagnostics needing review: ${report.summary.diagnosticsNeedingReviewCount}`,
-    `- Ignored diagnostic noise: ${report.summary.ignoredDiagnosticNoiseCount}`,
-    `- Outcome: ${report.outcome.type}`,
-    `- Outcome summary: ${report.outcome.summary}`,
+    '| Metric | Result |',
+    '| --- | --- |',
+    `| Pages inspected | ${report.summary.pagesInspected} |`,
+    `| Unique exploratory findings | ${report.summary.siteWideExploratoryFindingsCount} |`,
+    `| Finding occurrences | ${report.summary.exploratoryQaFindingsCount} |`,
+    `| Highest exploratory severity | ${formatSeverity(report.summary.highestExploratoryQaSeverity)} |`,
+    `| Rule-based findings | ${report.summary.findingsCount} |`,
+    `| Actionable diagnostics | ${report.summary.actionableDiagnosticsCount} |`,
+    `| Diagnostics needing review | ${report.summary.diagnosticsNeedingReviewCount} |`,
+    `| Run outcome | ${report.outcome.type.toUpperCase()} |`,
     '',
-    '## Site-Wide Exploratory Findings',
+    report.outcome.summary,
+    '',
+    '## Findings',
     ''
   ];
 
@@ -72,7 +337,7 @@ export async function writeMarkdownReport(
     0
   ) {
     lines.push(
-      'No site-wide exploratory QA candidate issues were identified.',
+      'No exploratory QA findings were identified.',
       ''
     );
   } else {
@@ -84,7 +349,6 @@ export async function writeMarkdownReport(
           siteWideFindingIndex
         ) => {
           const {
-            fingerprint,
             representativeFinding,
             occurrenceCount,
             affectedPageCount,
@@ -92,47 +356,148 @@ export async function writeMarkdownReport(
           } =
             siteWideFinding;
 
+          /*
+           * Resolve all occurrence outcomes first.
+           *
+           * Keeping this outside a mutating forEach callback
+           * also allows TypeScript to narrow the resulting
+           * values correctly.
+           */
+          const outcomes =
+            occurrences
+              .map(
+                occurrence =>
+                  getOccurrenceOutcome(
+                    report,
+                    occurrence.pageNumber,
+                    occurrence.findingNumber
+                  )
+              )
+              .filter(
+                (
+                  outcome
+                ): outcome is NonNullable<
+                  typeof outcome
+                > =>
+                  outcome !== null
+              );
+
+          const statuses:
+            FindingInvestigationStatus[] =
+            outcomes.map(
+              outcome =>
+                outcome.status
+            );
+
+          const representativeOutcome =
+            outcomes[0] ??
+            null;
+
+          const investigationStatus =
+            summarizeInvestigationStatuses(
+              statuses
+            );
+
           lines.push(
-            `### Finding ${siteWideFindingIndex + 1}: ${representativeFinding.severity.toUpperCase()} - ${representativeFinding.title}`,
+            `### ${siteWideFindingIndex + 1}. ${formatSeverity(representativeFinding.severity)} - ${representativeFinding.title}`,
             '',
-            `- Category: ${representativeFinding.category}`,
-            `- Severity: ${representativeFinding.severity}`,
-            `- Confidence: ${representativeFinding.confidence}`,
-            `- Occurrences: ${occurrenceCount}`,
-            `- Affected pages: ${affectedPageCount}`,
-            `- Fingerprint: \`${fingerprint}\``,
-            `- Representative evidence: ${representativeFinding.evidence}`,
-            `- Reasoning: ${representativeFinding.reasoning}`,
-            `- Suggested check: ${representativeFinding.suggestedCheck}`,
+            `**Status:** ${investigationStatus}  `,
+            `**Confidence:** ${formatConfidence(representativeFinding.confidence)}  `,
+            `**Observed on:** ${affectedPageCount} page${affectedPageCount === 1 ? '' : 's'} (${occurrenceCount} occurrence${occurrenceCount === 1 ? '' : 's'})`,
             '',
-            '#### Observed On',
+            representativeFinding.evidence,
             ''
+          );
+
+          if (
+            representativeOutcome !==
+            null
+          ) {
+            lines.push(
+              `**Investigation:** ${representativeOutcome.summary}`,
+              ''
+            );
+          }
+
+          lines.push(
+            `**Recommended next step:** ${representativeFinding.suggestedCheck}`,
+            '',
+            '| Page | Verification | Evidence |',
+            '| --- | --- | --- |'
           );
 
           occurrences.forEach(
             occurrence => {
+              const outcome =
+                getOccurrenceOutcome(
+                  report,
+                  occurrence.pageNumber,
+                  occurrence.findingNumber
+                );
+
+              const status =
+                outcome ===
+                null
+                  ? 'NOT INVESTIGATED'
+                  : formatInvestigationStatus(
+                    outcome.status
+                  );
+
               lines.push(
-                `**Page ${occurrence.pageNumber}, finding ${occurrence.findingNumber}**`,
-                '',
-                `- Page title: ${occurrence.pageTitle || '(empty)'}`,
-                `- URL: ${occurrence.pageUrl}`,
-                `- Screenshot: ${occurrence.screenshotPath ?? 'Not captured'}`,
-                ''
+                `| ${createPageLink(occurrence.pageTitle, occurrence.pageUrl)} | ${status} | ${createScreenshotLink(occurrence.screenshotPath)} |`
               );
             }
+          );
+
+          lines.push(
+            ''
           );
         }
       );
   }
 
+  if (
+    report.summary.findingsCount >
+    0
+  ) {
+    lines.push(
+      '## Rule-Based Findings',
+      ''
+    );
+
+    report.inspectedPages.forEach(
+      pageResult => {
+        pageResult.findings.forEach(
+          finding => {
+            lines.push(
+              `- **${formatSeverity(finding.severity)} - ${finding.title}** on ${createPageLink(pageResult.observation.title, pageResult.observation.finalUrl)}: ${finding.evidence}`
+            );
+          }
+        );
+      }
+    );
+
+    lines.push(
+      ''
+    );
+  }
+
   lines.push(
-    '## Homepage',
+    '## Pages Inspected',
     '',
-    `- Requested URL: ${report.homepage.requestedUrl}`,
-    `- Final URL: ${report.homepage.finalUrl}`,
-    `- HTTP status: ${formatStatus(report.homepage.httpStatus)}`,
-    `- Title: ${report.homepage.title || '(empty)'}`,
-    ''
+    '| Page | HTTP | Exploratory findings | Rule-based findings | Technical health |',
+    '| --- | ---: | ---: | ---: | --- |'
+  );
+
+  report.inspectedPages.forEach(
+    (
+      pageResult,
+      pageIndex
+    ) => {
+      lines.push(
+        `| ${createPageLink(pageResult.observation.title, pageResult.observation.finalUrl)} | ${formatHttpStatus(pageResult.observation.httpStatus)} | ${pageResult.exploratoryQaAnalysis.findings.length} | ${pageResult.findings.length} | ${getPageTechnicalStatus(report, pageIndex)} |`
+      );
+    }
   );
 
   if (
@@ -140,381 +505,49 @@ export async function writeMarkdownReport(
     0
   ) {
     lines.push(
-      '## Inspected Pages',
-      '',
-      'No additional pages were inspected.',
-      ''
+      '| No additional pages were inspected | - | - | - | - |'
     );
   }
 
-  report.inspectedPages.forEach(
-    (
-      pageResult,
-      index
-    ) => {
-      const pageNumber =
-        index + 1;
+  lines.push(
+    '',
+    '## Technical Health',
+    ''
+  );
 
-      const {
-        selection,
-        observation,
-        diagnostics,
-        classifiedDiagnostics,
-        screenshotPath,
-        findings,
-        exploratoryQaAnalysis,
-        exploratoryInvestigation
-      } = pageResult;
+  if (
+    report.summary
+      .actionableDiagnosticsCount ===
+      0 &&
+    report.summary
+      .diagnosticsNeedingReviewCount ===
+      0
+  ) {
+    lines.push(
+      'No actionable browser or network diagnostics were detected.'
+    );
+  } else {
+    lines.push(
+      `- Actionable diagnostics: ${report.summary.actionableDiagnosticsCount}`,
+      `- Diagnostics needing review: ${report.summary.diagnosticsNeedingReviewCount}`
+    );
+  }
 
-      const actionableCount =
-        classifiedDiagnostics
-          .failedRequests
-          .filter(
-            item =>
-              item.disposition ===
-              'actionable'
-          )
-          .length;
+  if (
+    report.summary
+      .ignoredDiagnosticNoiseCount >
+    0
+  ) {
+    lines.push(
+      '',
+      `${report.summary.ignoredDiagnosticNoiseCount} diagnostic event${report.summary.ignoredDiagnosticNoiseCount === 1 ? '' : 's'} were classified as ignored browser, telemetry, advertising, or third-party noise.`
+    );
+  }
 
-      const needsReviewCount =
-        classifiedDiagnostics
-          .failedRequests
-          .filter(
-            item =>
-              item.disposition ===
-              'needs-review'
-          )
-          .length;
-
-      const ignoredNoiseCount =
-        classifiedDiagnostics
-          .failedRequests
-          .filter(
-            item =>
-              item.disposition ===
-              'ignored-noise'
-          )
-          .length;
-
-      lines.push(
-        `## Inspected Page ${pageNumber}`,
-        '',
-        '### Agent Selection',
-        '',
-        `- Link text: ${selection.link.text}`,
-        `- Selected URL: ${selection.link.url}`,
-        `- Reason: ${selection.reason}`,
-        '',
-        '### Page Observation',
-        '',
-        `- Requested URL: ${observation.requestedUrl}`,
-        `- Final URL: ${observation.finalUrl}`,
-        `- HTTP status: ${formatStatus(observation.httpStatus)}`,
-        `- Title: ${observation.title || '(empty)'}`,
-        '',
-        '### Headings',
-        ''
-      );
-
-      if (
-        observation.headings.length ===
-        0
-      ) {
-        lines.push(
-          'No H1 or H2 headings were found.',
-          ''
-        );
-      } else {
-        observation.headings.forEach(
-          heading => {
-            lines.push(
-              `- ${heading}`
-            );
-          }
-        );
-
-        lines.push(
-          ''
-        );
-      }
-
-      lines.push(
-        '### Browser Diagnostics',
-        '',
-        `- Console errors: ${diagnostics.consoleErrors.length}`,
-        `- Failed network requests: ${diagnostics.failedRequests.length}`,
-        '',
-        '### Diagnostic Classification',
-        '',
-        `- Actionable failed requests: ${actionableCount}`,
-        `- Needs review: ${needsReviewCount}`,
-        `- Ignored noise: ${ignoredNoiseCount}`,
-        '',
-        '### Screenshot Evidence',
-        ''
-      );
-
-      if (
-        screenshotPath ===
-        null
-      ) {
-        lines.push(
-          'No screenshot was captured because no finding, autonomous action, or review-worthy diagnostic triggered evidence collection.',
-          ''
-        );
-      } else {
-        lines.push(
-          `- Screenshot path: ${screenshotPath}`,
-          ''
-        );
-      }
-
-      lines.push(
-        '#### Console Errors',
-        ''
-      );
-
-      if (
-        diagnostics.consoleErrors
-          .length ===
-        0
-      ) {
-        lines.push(
-          'No browser console errors were recorded.',
-          ''
-        );
-      } else {
-        diagnostics.consoleErrors.forEach(
-          (
-            consoleError,
-            errorIndex
-          ) => {
-            lines.push(
-              `**Console error ${errorIndex + 1}**`,
-              '',
-              `- Message: ${consoleError.text}`,
-              `- Source URL: ${consoleError.sourceUrl ?? 'Unknown'}`,
-              `- Line: ${consoleError.lineNumber ?? 'Unknown'}`,
-              `- Column: ${consoleError.columnNumber ?? 'Unknown'}`,
-              ''
-            );
-          }
-        );
-      }
-
-      lines.push(
-        '#### Classified Failed Network Requests',
-        ''
-      );
-
-      if (
-        classifiedDiagnostics
-          .failedRequests
-          .length ===
-        0
-      ) {
-        lines.push(
-          'No failed network requests were recorded.',
-          ''
-        );
-      } else {
-        classifiedDiagnostics
-          .failedRequests
-          .forEach(
-            (
-              classifiedRequest,
-              requestIndex
-            ) => {
-              const {
-                request,
-                disposition,
-                reason
-              } =
-                classifiedRequest;
-
-              lines.push(
-                `**Failed request ${requestIndex + 1}**`,
-                '',
-                `- Disposition: ${disposition}`,
-                `- Reason: ${reason}`,
-                `- URL: ${request.url}`,
-                `- Method: ${request.method}`,
-                `- Resource type: ${request.resourceType}`,
-                `- Failure: ${request.failureText}`,
-                ''
-              );
-            }
-          );
-      }
-
-      lines.push(
-        '#### Raw Failed Network Requests',
-        ''
-      );
-
-      if (
-        diagnostics
-          .failedRequests
-          .length ===
-        0
-      ) {
-        lines.push(
-          'No failed network requests were recorded.',
-          ''
-        );
-      } else {
-        diagnostics
-          .failedRequests
-          .forEach(
-            (
-              failedRequest,
-              requestIndex
-            ) => {
-              lines.push(
-                `**Raw failed request ${requestIndex + 1}**`,
-                '',
-                `- URL: ${failedRequest.url}`,
-                `- Method: ${failedRequest.method}`,
-                `- Resource type: ${failedRequest.resourceType}`,
-                `- Failure: ${failedRequest.failureText}`,
-                ''
-              );
-            }
-          );
-      }
-
-      lines.push(
-        '### Rule-Based Findings',
-        ''
-      );
-
-      if (
-        findings.length ===
-        0
-      ) {
-        lines.push(
-          'No rule-based page health issues were detected.',
-          ''
-        );
-      } else {
-        findings.forEach(
-          finding => {
-            lines.push(
-              `#### ${finding.severity.toUpperCase()} - ${finding.title}`,
-              '',
-              `- Code: ${finding.code}`,
-              `- URL: ${finding.url}`,
-              `- Evidence: ${finding.evidence}`,
-              ''
-            );
-          }
-        );
-      }
-
-      lines.push(
-        '### Exploratory QA Analysis',
-        '',
-        `**Summary:** ${exploratoryQaAnalysis.summary}`,
-        ''
-      );
-
-      if (
-        exploratoryQaAnalysis
-          .findings
-          .length ===
-        0
-      ) {
-        lines.push(
-          'No evidence-grounded exploratory QA candidate issues were identified.',
-          ''
-        );
-      } else {
-        exploratoryQaAnalysis
-          .findings
-          .forEach(
-            (
-              finding,
-              findingIndex
-            ) => {
-              lines.push(
-                `#### Candidate ${findingIndex + 1}: ${finding.severity.toUpperCase()} - ${finding.title}`,
-                '',
-                `- Category: ${finding.category}`,
-                `- Severity: ${finding.severity}`,
-                `- Confidence: ${finding.confidence}`,
-                `- Evidence: ${finding.evidence}`,
-                `- Reasoning: ${finding.reasoning}`,
-                `- Suggested check: ${finding.suggestedCheck}`,
-                ''
-              );
-            }
-          );
-      }
-
-      /*
-       * Autonomous investigation is kept separate from the original
-       * exploratory analysis.
-       *
-       * Analysis answers:
-       *   "What looked suspicious?"
-       *
-       * Investigation answers:
-       *   "What did the agent actually do about it?"
-       */
-      lines.push(
-        '### Autonomous Investigation',
-        ''
-      );
-
-      if (
-        exploratoryInvestigation ===
-        null
-      ) {
-        lines.push(
-          'No autonomous investigation was performed on this page.',
-          ''
-        );
-      } else {
-        lines.push(
-          `- Page URL: ${exploratoryInvestigation.pageUrl}`,
-          `- Maximum allowed steps: ${exploratoryInvestigation.maxSteps}`,
-          `- Completed steps: ${exploratoryInvestigation.completedSteps}`,
-          `- Stop reason: ${exploratoryInvestigation.stopReason}`,
-          ''
-        );
-
-        if (
-          exploratoryInvestigation
-            .steps
-            .length ===
-          0
-        ) {
-          lines.push(
-            'The autonomous planner completed without recording any investigation steps.',
-            ''
-          );
-        } else {
-          exploratoryInvestigation
-            .steps
-            .forEach(
-              step => {
-                lines.push(
-                  `#### Investigation Step ${step.step}`,
-                  '',
-                  `- Hypothesis: ${step.decision.hypothesis}`,
-                  `- Reasoning: ${step.decision.reasoning}`,
-                  `- Requested action: \`${step.decision.action.kind}\``,
-                  `- Action details: \`${JSON.stringify(step.decision.action)}\``,
-                  `- Expected observation: ${step.decision.expectedObservation}`,
-                  `- Execution status: ${step.executionResult.status}`,
-                  `- Execution detail: ${step.executionResult.detail}`,
-                  ''
-                );
-              }
-            );
-        }
-      }
-    }
+  lines.push(
+    '',
+    'Full execution details, raw diagnostics, exploratory analysis, investigation steps, and deterministic evidence are retained in `report.json`.',
+    ''
   );
 
   await mkdir(

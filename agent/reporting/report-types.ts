@@ -7,7 +7,8 @@ import type {
 } from '../analysis/evaluate-page';
 
 import type {
-  ExploratoryQaAnalysis
+  ExploratoryQaAnalysis,
+  ExploratoryQaFinding
 } from '../analysis/exploratory-qa-schema';
 
 import type {
@@ -21,6 +22,10 @@ import type {
 import type {
   VisitedPageObservation
 } from '../browser/visit-approved-link';
+
+import type {
+  FindingInvestigationOutcome
+} from '../investigation/evaluate-finding-investigation-outcome';
 
 import type {
   ExploratoryLoopResult
@@ -40,6 +45,23 @@ export interface HomepageObservation {
 export interface SelectedNavigationTarget {
   link: NavigationLink;
   reason: string;
+}
+
+/**
+ * Connects one original exploratory QA candidate finding
+ * with the deterministic conclusion produced from its
+ * investigation evidence.
+ *
+ * Keeping the finding and outcome together avoids relying
+ * on array positions and makes the result suitable for
+ * CLI, JSON, desktop, and web presentation layers.
+ */
+export interface ExploratoryFindingResult {
+  finding:
+    ExploratoryQaFinding;
+
+  outcome:
+    FindingInvestigationOutcome;
 }
 
 export interface InspectedPageResult {
@@ -87,6 +109,19 @@ export interface InspectedPageResult {
    */
   exploratoryInvestigation:
     ExploratoryLoopResult | null;
+
+  /*
+   * Candidate findings paired with their deterministic
+   * investigation conclusions.
+   *
+   * Every exploratory candidate receives a result.
+   *
+   * When no conclusive investigation evidence exists,
+   * the outcome is "inconclusive" rather than silently
+   * treating the candidate as disproven.
+   */
+  exploratoryFindingResults:
+    ExploratoryFindingResult[];
 }
 
 export interface AgentRunOutcome {

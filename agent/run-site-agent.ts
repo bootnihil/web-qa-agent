@@ -32,6 +32,10 @@ import {
   normalizeUrlForComparison
 } from './exploration/visited-links';
 
+import {
+  evaluateFindingInvestigationOutcome
+} from './investigation/evaluate-finding-investigation-outcome';
+
 import { runExploratoryLoop } from './planning/run-exploratory-loop';
 
 import {
@@ -132,18 +136,6 @@ async function main(): Promise<void> {
       startedAt
     );
 
-  /*
-   * Parse and validate all command-line input before opening
-   * a browser or making any Gemini request.
-   *
-   * Examples:
-   *
-   *   npm run agent:explore -- https://example.com/
-   *
-   *   npm run agent:explore -- https://example.com/ \
-   *     --pages 5 \
-   *     --steps-per-page 4
-   */
   const runOptions =
     parseAgentRunOptions(
       process.argv.slice(
@@ -156,10 +148,6 @@ async function main(): Promise<void> {
       runOptions.siteIdOrUrl
     );
 
-  /*
-   * Apply per-run exploration limits without mutating the
-   * configured or temporary base site definition.
-   */
   const site =
     applyAgentRunOptions(
       baseSite,
@@ -224,9 +212,6 @@ async function main(): Promise<void> {
       );
 
     try {
-      /*
-       * Open the configured starting page.
-       */
       const homepageResponse =
         await page.goto(
           site.startUrl,
@@ -285,10 +270,6 @@ async function main(): Promise<void> {
         `Title: ${homepageObservation.title}`
       );
 
-      /*
-       * Track pages already visited so the agent does not
-       * continually revisit the same navigation targets.
-       */
       const visitedUrls =
         new Set<string>();
 
@@ -302,9 +283,6 @@ async function main(): Promise<void> {
         homepageObservation.finalUrl
       );
 
-      /*
-       * The link pool grows as new pages are inspected.
-       */
       const linkPool =
         new Map<
           string,
@@ -337,15 +315,6 @@ async function main(): Promise<void> {
         null =
           null;
 
-      /*
-       * Multi-page exploration loop.
-       *
-       * The navigation agent chooses which safe page to visit next.
-       *
-       * Once a page is opened, the separate exploratory planner is
-       * allowed to investigate that page within its own bounded
-       * per-page action budget.
-       */
       while (
         inspectedPages.length <
           site.maxPages &&
@@ -403,9 +372,6 @@ async function main(): Promise<void> {
 
         agentSteps += 1;
 
-        /*
-         * Gemini chooses one safe internal navigation target.
-         */
         const decision =
           await chooseNavigationLink(
             site,
@@ -458,11 +424,6 @@ async function main(): Promise<void> {
 
         diagnosticsCollector.reset();
 
-        /*
-         * The deterministic browser layer performs the approved
-         * navigation and verifies the destination remains inside
-         * the configured host boundary.
-         */
         const pageObservation =
           await visitApprovedLink(
             page,
@@ -475,10 +436,6 @@ async function main(): Promise<void> {
           pageObservation.finalUrl
         );
 
-        /*
-         * Some resource failures and console messages arrive shortly
-         * after the main document has loaded.
-         */
         await page.waitForTimeout(
           1_000
         );
@@ -561,9 +518,6 @@ async function main(): Promise<void> {
           `Ignored noise: ${ignoredNoiseCount}`
         );
 
-        /*
-         * Deterministic page-health evaluation.
-         */
         const findings =
           evaluatePageObservation(
             pageObservation
@@ -590,10 +544,6 @@ async function main(): Promise<void> {
           );
         }
 
-        /*
-         * Extract the current user-facing page state in a generic,
-         * structured representation that Gemini can reason about.
-         */
         const pageContent =
           await extractPageContent(
             page
@@ -627,10 +577,6 @@ async function main(): Promise<void> {
           `Body text characters: ${pageContent.bodyText.length}`
         );
 
-        /*
-         * Password-bearing pages are still observable, but we do not
-         * autonomously interact with them.
-         */
         const containsPasswordField =
           pageContent.textFields.some(
             field =>
@@ -638,11 +584,6 @@ async function main(): Promise<void> {
               'password'
           );
 
-        /*
-         * Gemini performs evidence-grounded exploratory QA analysis.
-         *
-         * These findings are candidate issues, not confirmed defects.
-         */
         const exploratoryQaAnalysis =
           await analyzePageForQa({
             observation:
@@ -678,16 +619,6 @@ async function main(): Promise<void> {
           );
         }
 
-        /*
-         * Run the bounded autonomous investigation.
-         *
-         * The planner sees:
-         * - the current live browser state;
-         * - the candidate findings discovered above;
-         * - its own previous investigation history.
-         *
-         * It may choose safe supported actions or stop voluntarily.
-         */
         let exploratoryInvestigation:
           InspectedPageResult['exploratoryInvestigation'] =
             null;
@@ -722,13 +653,6 @@ async function main(): Promise<void> {
               exploratoryQaAnalysis.findings
             );
 
-          /*
-           * Defense-in-depth host verification.
-           *
-           * None of the currently permitted exploratory actions can
-           * intentionally navigate away, but we still verify the browser
-           * remained inside the configured host boundary.
-           */
           const postInvestigationUrl =
             new URL(
               page.url()
@@ -758,9 +682,48 @@ async function main(): Promise<void> {
         }
 
         /*
-         * Capture evidence after autonomous investigation so the saved
-         * screenshot represents the resulting browser state.
+         * Convert candidate findings plus collected investigation
+         * evidence into deterministic finding outcomes.
+         *
+         * This is deliberately separate from Gemini reasoning.
+         * The same structured result can later be consumed by the
+         * CLI, Windows UI, SaaS UI, JSON, or Markdown.
          */
+        const exploratoryFindingResults =
+          exploratoryQaAnalysis.findings.map(
+            finding => ({
+              finding,
+
+              outcome:
+                evaluateFindingInvestigationOutcome(
+                  finding,
+                  exploratoryInvestigation
+                )
+            })
+          );
+
+        if (
+          exploratoryFindingResults.length >
+          0
+        ) {
+          console.log(
+            '\nExploratory finding outcomes:'
+          );
+
+          for (
+            const result of
+              exploratoryFindingResults
+          ) {
+            console.log(
+              `- [${result.outcome.status.toUpperCase()}] ${result.finding.title}`
+            );
+
+            console.log(
+              `  ${result.outcome.summary}`
+            );
+          }
+        }
+
         const investigationPerformedAction =
           exploratoryInvestigation
             ?.steps
@@ -820,14 +783,6 @@ async function main(): Promise<void> {
           );
         }
 
-        /*
-         * Preserve everything we learned about the page:
-         *
-         * - deterministic findings;
-         * - AI candidate findings;
-         * - autonomous planner decisions and actions;
-         * - browser evidence.
-         */
         inspectedPages.push({
           selection: {
             link:
@@ -850,15 +805,11 @@ async function main(): Promise<void> {
 
           exploratoryQaAnalysis,
 
-          exploratoryInvestigation
+          exploratoryInvestigation,
+
+          exploratoryFindingResults
         });
 
-        /*
-         * Reinspect navigation after the page investigation.
-         *
-         * This allows newly available safe links to enter the pool for
-         * subsequent website-level exploration.
-         */
         const discoveredLinks =
           await inspectNavigation(
             page,
@@ -880,9 +831,6 @@ async function main(): Promise<void> {
         );
       }
 
-      /*
-       * Determine why the site-level exploration stopped.
-       */
       if (
         outcome ===
         null
@@ -920,9 +868,6 @@ async function main(): Promise<void> {
         }
       }
 
-      /*
-       * Aggregate run-level report statistics.
-       */
       const allFindings =
         inspectedPages.flatMap(
           pageResult =>
@@ -937,10 +882,6 @@ async function main(): Promise<void> {
               .findings
         );
 
-      /*
-       * Build a deterministic site-wide view of exploratory
-       * findings while retaining all original page-level data.
-       */
       const siteWideExploratoryFindings =
         buildSiteWideExploratoryFindings(
           inspectedPages.map(

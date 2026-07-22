@@ -147,6 +147,14 @@ async function main(): Promise<void> {
           'No exploratory QA analysis was performed for this synthetic screenshot trigger check.'
       };
 
+    /*
+     * No exploratory candidates exist in this synthetic check,
+     * therefore there are no finding investigation outcomes.
+     */
+    const exploratoryFindingResults:
+      SiteAgentReport['inspectedPages'][number]['exploratoryFindingResults'] =
+        [];
+
     const shouldCaptureScreenshot =
       findings.length >
         0 ||
@@ -286,7 +294,9 @@ async function main(): Promise<void> {
             exploratoryQaAnalysis,
 
             exploratoryInvestigation:
-              null
+              null,
+
+            exploratoryFindingResults
           }
         ],
 

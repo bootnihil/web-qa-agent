@@ -9,11 +9,13 @@ import {
 function createCountryFinding(
   title: string,
   controlLabel: string | null,
-  controlName: string | null
+  controlName: string | null,
+  category:
+    ExploratoryQaFinding['category'] =
+      'content'
 ): ExploratoryQaFinding {
   return {
-    category:
-      'content',
+    category,
 
     severity:
       'low',
@@ -99,10 +101,18 @@ function main(): void {
           'page-03.png',
 
         findings: [
+          /*
+           * Deliberately classify this occurrence differently
+           * from the first two.
+           *
+           * Structured target identity should still group all
+           * three occurrences into one site-wide finding.
+           */
           createCountryFinding(
             'Misspelled country option in form',
             null,
-            'country'
+            'country',
+            'consistency'
           ),
 
           {
@@ -147,7 +157,7 @@ function main(): void {
     siteWideFindings.find(
       finding =>
         finding.fingerprint ===
-        'target|content|select-option|country|equador'
+        'target|select-option|country|equador'
     );
 
   if (

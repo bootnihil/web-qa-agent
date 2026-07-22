@@ -15,6 +15,10 @@ import type {
 } from './browser/collect-page-diagnostics';
 
 import {
+  evaluateFindingInvestigationOutcome
+} from './investigation/evaluate-finding-investigation-outcome';
+
+import {
   buildSiteWideExploratoryFindings
 } from './reporting/build-site-wide-exploratory-findings';
 
@@ -34,11 +38,13 @@ import {
 function createCountryFinding(
   title: string,
   controlLabel: string | null,
-  controlName: string | null
+  controlName: string | null,
+  category:
+    ExploratoryQaFinding['category'] =
+      'content'
 ): ExploratoryQaFinding {
   return {
-    category:
-      'content',
+    category,
 
     severity:
       'low',
@@ -78,7 +84,8 @@ function createPageResult(
   pageNumber: number,
   slug: string,
   title: string,
-  finding: ExploratoryQaFinding
+  finding:
+    ExploratoryQaFinding
 ): InspectedPageResult {
   const pageUrl =
     `https://example.com/${slug}`;
@@ -88,6 +95,9 @@ function createPageResult(
     consoleErrors: [],
     failedRequests: []
   };
+
+  const exploratoryInvestigation =
+    null;
 
   return {
     selection: {
@@ -141,8 +151,19 @@ function createPageResult(
         'A possible misspelled country option was identified.'
     },
 
-    exploratoryInvestigation:
-      null
+    exploratoryInvestigation,
+
+    exploratoryFindingResults: [
+      {
+        finding,
+
+        outcome:
+          evaluateFindingInvestigationOutcome(
+            finding,
+            exploratoryInvestigation
+          )
+      }
+    ]
   };
 }
 
@@ -190,7 +211,8 @@ async function main(): Promise<void> {
         createCountryFinding(
           'Misspelled country option in form',
           null,
-          'country'
+          'country',
+          'consistency'
         )
       )
     ];
@@ -310,6 +332,12 @@ async function main(): Promise<void> {
       report
     );
 
+  const json =
+    await readFile(
+      jsonReport.filePath,
+      'utf8'
+    );
+
   const markdown =
     await readFile(
       markdownReport.filePath,
@@ -336,54 +364,166 @@ async function main(): Promise<void> {
   }
 
   if (
-    !markdown.includes(
-      '- Unique site-wide exploratory findings: 1'
-    )
+    siteWideExploratoryFindings[0]
+      .affectedPageCount !==
+    3
   ) {
     throw new Error(
-      'Markdown summary does not contain the unique site-wide finding count.'
+      'Expected the site-wide finding to affect 3 pages.'
+    );
+  }
+
+  /*
+   * This explicitly protects the real-world deduplication
+   * case where Gemini describes equivalent findings using
+   * different categories.
+   */
+  if (
+    siteWideExploratoryFindings[0]
+      .fingerprint !==
+    'target|select-option|country|equador'
+  ) {
+    throw new Error(
+      'The site-wide finding does not use the expected category-independent target fingerprint.'
     );
   }
 
   if (
     !markdown.includes(
-      '- Occurrences: 3'
+      '| Unique exploratory findings | 1 |'
     )
   ) {
     throw new Error(
-      'Markdown report does not contain the expected occurrence count.'
+      'Markdown summary does not contain the unique exploratory finding count.'
     );
   }
 
   if (
     !markdown.includes(
-      '- Affected pages: 3'
+      '| Finding occurrences | 3 |'
     )
   ) {
     throw new Error(
-      'Markdown report does not contain the expected affected-page count.'
+      'Markdown summary does not contain the expected finding occurrence count.'
     );
   }
 
   if (
     !markdown.includes(
-      '`target|content|select-option|country|equador`'
+      '**Observed on:** 3 pages (3 occurrences)'
     )
   ) {
     throw new Error(
-      'Markdown report does not contain the expected deterministic fingerprint.'
+      'Markdown finding does not contain the expected affected-page summary.'
+    );
+  }
+
+  if (
+    !markdown.includes(
+      '**Status:** INCONCLUSIVE'
+    )
+  ) {
+    throw new Error(
+      'Markdown finding does not contain the expected aggregated investigation status.'
+    );
+  }
+
+  if (
+    !markdown.includes(
+      '| [Radiology](https://example.com/radiology) | INCONCLUSIVE | [page-01.png](evidence/page-01.png) |'
+    )
+  ) {
+    throw new Error(
+      'Markdown finding does not contain the expected concise occurrence row.'
+    );
+  }
+
+  if (
+    !markdown.includes(
+      '## Pages Inspected'
+    )
+  ) {
+    throw new Error(
+      'Markdown report does not contain the pages-inspected summary.'
+    );
+  }
+
+  if (
+    !markdown.includes(
+      '## Technical Health'
+    )
+  ) {
+    throw new Error(
+      'Markdown report does not contain the technical-health summary.'
+    );
+  }
+
+  /*
+   * The human-readable report must not regress into a raw
+   * execution transcript.
+   *
+   * These details still exist in report.json.
+   */
+  const verboseMarkdownSections = [
+    '### Agent Selection',
+    '### Page Observation',
+    '### Headings',
+    '### Browser Diagnostics',
+    '### Diagnostic Classification',
+    '#### Console Errors',
+    '#### Classified Failed Network Requests',
+    '#### Raw Failed Network Requests',
+    '### Exploratory QA Analysis',
+    '### Finding Investigation Outcomes',
+    '### Autonomous Investigation',
+    '#### Investigation Step',
+    'Fingerprint:'
+  ];
+
+  verboseMarkdownSections.forEach(
+    section => {
+      if (
+        markdown.includes(
+          section
+        )
+      ) {
+        throw new Error(
+          `Markdown report still contains verbose execution detail: ${section}`
+        );
+      }
+    }
+  );
+
+  /*
+   * Each synthetic candidate had no autonomous
+   * investigation.
+   *
+   * JSON remains the exhaustive execution record, so all
+   * three deterministic inconclusive outcomes must still be
+   * preserved there even though the Markdown report presents
+   * them once at site level.
+   */
+  if (
+    countOccurrences(
+      json,
+      '"status": "inconclusive"'
+    ) !==
+    3
+  ) {
+    throw new Error(
+      'JSON report does not contain the expected 3 inconclusive finding outcomes.'
     );
   }
 
   if (
     countOccurrences(
       markdown,
-      '### Exploratory QA Analysis'
-    ) !==
-    3
+      'INCONCLUSIVE'
+    ) <
+    4
   ) {
     throw new Error(
-      'The original page-level exploratory findings were not all preserved.'
+      'Markdown report does not present the site-wide and occurrence-level investigation statuses.'
     );
   }
 
@@ -398,7 +538,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    'Site-wide Markdown and JSON report check passed.'
+    'Human-readable Markdown and exhaustive JSON report check passed.'
   );
 
   console.log(
@@ -407,6 +547,10 @@ async function main(): Promise<void> {
 
   console.log(
     `Original occurrences: ${report.summary.exploratoryQaFindingsCount}`
+  );
+
+  console.log(
+    'Synthetic finding outcomes: 3 inconclusive'
   );
 
   console.log(
@@ -419,7 +563,10 @@ async function main(): Promise<void> {
 }
 
 main().catch(
-  (error: unknown) => {
+  (
+    error:
+      unknown
+  ) => {
     console.error(
       'Site-wide report check failed:',
       error

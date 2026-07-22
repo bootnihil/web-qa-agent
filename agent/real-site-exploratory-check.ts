@@ -16,6 +16,10 @@ import { inspectNavigation } from './browser/inspect-navigation';
 import { visitApprovedLink } from './browser/visit-approved-link';
 
 import {
+  evaluateFindingInvestigationOutcome
+} from './investigation/evaluate-finding-investigation-outcome';
+
+import {
   buildSiteWideExploratoryFindings
 } from './reporting/build-site-wide-exploratory-findings';
 
@@ -469,6 +473,34 @@ async function main(): Promise<void> {
       }
 
       /*
+       * This controlled integration check does not run the
+       * autonomous exploratory planner/action loop.
+       *
+       * Therefore its exploratory candidates do not have
+       * autonomous investigation evidence and must remain
+       * explicitly inconclusive.
+       *
+       * Targeted screenshot capture above is evidence capture,
+       * not a substitute for the autonomous investigation
+       * result contract.
+       */
+      const exploratoryInvestigation =
+        null;
+
+      const exploratoryFindingResults =
+        exploratoryQaAnalysis.findings.map(
+          finding => ({
+            finding,
+
+            outcome:
+              evaluateFindingInvestigationOutcome(
+                finding,
+                exploratoryInvestigation
+              )
+          })
+        );
+
+      /*
        * Produce the same run-level deduplicated view used
        * by the full multi-page autonomous agent.
        *
@@ -549,8 +581,9 @@ async function main(): Promise<void> {
 
             exploratoryQaAnalysis,
 
-            exploratoryInvestigation:
-              null
+            exploratoryInvestigation,
+
+            exploratoryFindingResults
           }
         ],
 
@@ -600,6 +633,28 @@ async function main(): Promise<void> {
         await writeMarkdownReport(
           report
         );
+
+      console.log(
+        '\nFinding investigation outcomes:'
+      );
+
+      if (
+        exploratoryFindingResults.length ===
+        0
+      ) {
+        console.log(
+          'No exploratory candidate findings.'
+        );
+      } else {
+        for (
+          const result of
+            exploratoryFindingResults
+        ) {
+          console.log(
+            `- [${result.outcome.status.toUpperCase()}] ${result.finding.title}`
+          );
+        }
+      }
 
       console.log(
         '\nIntegration report saved:'

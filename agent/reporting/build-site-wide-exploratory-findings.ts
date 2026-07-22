@@ -145,10 +145,11 @@ function getSelectControlIdentity(
  *
  * The real Aidoc issue, for example, becomes approximately:
  *
- *   target|content|select-option|country|equador
+ *   target|select-option|country|equador
  *
- * AI-generated titles may differ between pages, but this
- * fingerprint remains stable.
+ * AI-generated titles and categories may differ between
+ * pages, but the underlying machine-readable target remains
+ * stable.
  */
 export function createExploratoryFindingFingerprint(
   finding:
@@ -175,9 +176,16 @@ export function createExploratoryFindingFingerprint(
         target.optionText
       );
 
+    /*
+     * Do not include the AI-generated category here.
+     *
+     * When a finding has a machine-readable target, the
+     * target itself is the stronger identity signal.
+     * Gemini may describe the same defect as "content" on
+     * one page and "consistency" on another.
+     */
     return [
       'target',
-      normalizedCategory,
       target.kind,
       controlIdentity,
       optionText
@@ -187,6 +195,10 @@ export function createExploratoryFindingFingerprint(
   /*
    * Findings without a machine-readable target use a
    * deliberately conservative fallback.
+   *
+   * Category is retained here because, without structured
+   * target information, it helps prevent unrelated findings
+   * from being incorrectly merged.
    *
    * This may leave some semantic duplicates unmerged, but
    * that is safer than incorrectly merging unrelated issues.
