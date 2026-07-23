@@ -485,8 +485,8 @@ export async function writeMarkdownReport(
   lines.push(
     '## Pages Inspected',
     '',
-    '| Page | HTTP | Exploratory findings | Rule-based findings | Technical health |',
-    '| --- | ---: | ---: | ---: | --- |'
+    '| Page | Predicted area / route family | Observed template | HTTP | Exploratory findings | Rule-based findings | Technical health |',
+    '| --- | --- | --- | ---: | ---: | ---: | --- |'
   );
 
   report.inspectedPages.forEach(
@@ -494,8 +494,25 @@ export async function writeMarkdownReport(
       pageResult,
       pageIndex
     ) => {
+      const predictedIdentity =
+        pageResult
+          .pageNovelty
+          .predictedIdentity;
+
+      const predictedIdentityLabel =
+        escapeTableCell(
+          `${predictedIdentity.areaKey} / ${predictedIdentity.routeFamilyKey}`
+        );
+
+      const observedTemplateKey =
+        escapeTableCell(
+          pageResult
+            .pageNovelty
+            .observedTemplateKey
+        );
+
       lines.push(
-        `| ${createPageLink(pageResult.observation.title, pageResult.observation.finalUrl)} | ${formatHttpStatus(pageResult.observation.httpStatus)} | ${pageResult.exploratoryQaAnalysis.findings.length} | ${pageResult.findings.length} | ${getPageTechnicalStatus(report, pageIndex)} |`
+        `| ${createPageLink(pageResult.observation.title, pageResult.observation.finalUrl)} | ${predictedIdentityLabel} | ${observedTemplateKey} | ${formatHttpStatus(pageResult.observation.httpStatus)} | ${pageResult.exploratoryQaAnalysis.findings.length} | ${pageResult.findings.length} | ${getPageTechnicalStatus(report, pageIndex)} |`
       );
     }
   );
@@ -505,7 +522,7 @@ export async function writeMarkdownReport(
     0
   ) {
     lines.push(
-      '| No additional pages were inspected | - | - | - | - |'
+      '| No additional pages were inspected | - | - | - | - | - | - |'
     );
   }
 

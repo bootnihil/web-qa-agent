@@ -1,6 +1,10 @@
 import { chromium } from '@playwright/test';
 import { inspectNavigation } from './browser/inspect-navigation';
 import { chooseNavigationLink } from './decisions/choose-navigation-link';
+import {
+  buildNoveltyCandidateWindow,
+  createPageNoveltyState
+} from './exploration/page-novelty';
 import { getSiteConfig } from './sites';
 
 async function main(): Promise<void> {
@@ -29,7 +33,11 @@ async function main(): Promise<void> {
 
     const decision = await chooseNavigationLink(
       site,
-      navigationLinks
+      buildNoveltyCandidateWindow(
+        navigationLinks,
+        navigationLinks,
+        createPageNoveltyState()
+      )
     );
 
     if (decision.type === 'finish') {

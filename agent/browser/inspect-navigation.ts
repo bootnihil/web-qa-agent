@@ -14,8 +14,7 @@ function normalizeText(value: string): string {
 
 export async function inspectNavigation(
   page: Page,
-  allowedHosts: string[],
-  maxLinks = 20
+  allowedHosts: string[]
 ): Promise<NavigationLink[]> {
   await page
     .waitForFunction(
@@ -33,10 +32,6 @@ export async function inspectNavigation(
   const seenUrls = new Set<string>();
 
   for (let index = 0; index < linkCount; index += 1) {
-    if (results.length >= maxLinks) {
-      break;
-    }
-
     const link = links.nth(index);
 
     if (!(await link.isVisible())) {

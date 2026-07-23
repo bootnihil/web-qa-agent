@@ -16,6 +16,11 @@ import { inspectNavigation } from './browser/inspect-navigation';
 import { visitApprovedLink } from './browser/visit-approved-link';
 
 import {
+  createObservedTemplateKey,
+  predictPageIdentity
+} from './exploration/page-novelty';
+
+import {
   evaluateFindingInvestigationOutcome
 } from './investigation/evaluate-finding-investigation-outcome';
 import {
@@ -582,6 +587,20 @@ async function main(): Promise<void> {
 
             observation:
               pageObservation,
+
+            pageNovelty: {
+              predictedIdentity:
+                predictPageIdentity(
+                  pageObservation
+                    .requestedUrl,
+                  navigationLinks
+                ),
+
+              observedTemplateKey:
+                createObservedTemplateKey(
+                  pageContent
+                )
+            },
 
             diagnostics,
 

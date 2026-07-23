@@ -33,6 +33,14 @@ import {
 } from './exploration/visited-links';
 
 import {
+  buildNoveltyCandidateWindow,
+  createPageNoveltyState,
+  predictPageIdentity,
+  registerInspectedPageNovelty,
+  registerPredictedPageIdentity
+} from './exploration/page-novelty';
+
+import {
   evaluateFindingInvestigationOutcome
 } from './investigation/evaluate-finding-investigation-outcome';
 import {
@@ -293,6 +301,9 @@ async function main(): Promise<void> {
           NavigationLink
         >();
 
+      const pageNoveltyState =
+        createPageNoveltyState();
+
       const homepageLinks =
         await inspectNavigation(
           page,
@@ -302,6 +313,14 @@ async function main(): Promise<void> {
       addLinksToPool(
         linkPool,
         homepageLinks
+      );
+
+      registerPredictedPageIdentity(
+        pageNoveltyState,
+        predictPageIdentity(
+          homepageObservation.finalUrl,
+          homepageLinks
+        )
       );
 
       console.log(
@@ -334,8 +353,12 @@ async function main(): Promise<void> {
           );
 
         const candidateLinks =
-          unvisitedLinks.slice(
-            0,
+          buildNoveltyCandidateWindow(
+            unvisitedLinks,
+            Array.from(
+              linkPool.values()
+            ),
+            pageNoveltyState,
             20
           );
 
@@ -349,6 +372,10 @@ async function main(): Promise<void> {
 
         console.log(
           `Unvisited safe candidates available: ${unvisitedLinks.length}`
+        );
+
+        console.log(
+          `Diversified candidates supplied to Gemini: ${candidateLinks.length}`
         );
 
         if (
@@ -553,6 +580,14 @@ async function main(): Promise<void> {
             page
           );
 
+        const pageNovelty =
+          registerInspectedPageNovelty(
+            pageNoveltyState,
+            decision
+              .predictedIdentity,
+            pageContent
+          );
+
         console.log(
           '\nStructured page content extracted:'
         );
@@ -579,6 +614,18 @@ async function main(): Promise<void> {
 
         console.log(
           `Body text characters: ${pageContent.bodyText.length}`
+        );
+
+        console.log(
+          `Predicted area: ${pageNovelty.predictedIdentity.areaKey}`
+        );
+
+        console.log(
+          `Predicted route family: ${pageNovelty.predictedIdentity.routeFamilyKey}`
+        );
+
+        console.log(
+          `Observed template: ${pageNovelty.observedTemplateKey}`
         );
 
         const containsPasswordField =
@@ -811,6 +858,8 @@ async function main(): Promise<void> {
 
           observation:
             pageObservation,
+
+          pageNovelty,
 
           diagnostics,
 

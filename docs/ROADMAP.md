@@ -2,7 +2,7 @@
 
 **Roadmap version:** 1.0  
 **Frozen on:** 2026-07-23  
-**Current stage:** Stage 2 — Page-type diversity and run-level novelty
+**Current stage:** Stage 3 — Known-finding context
 
 ## How this roadmap is used
 
@@ -47,6 +47,8 @@ CheckQuest should not interact with a page merely because an element is availabl
 ---
 
 # Stage 2 — Page-type diversity and run-level novelty
+
+**Completed:** 2026-07-23
 
 ## Goal
 
@@ -308,5 +310,6 @@ Before moving to the next stage:
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-07-23 | 1.0 | Stage 2 passed deterministic checks, navigation-choice integration, a five-page real-site Aidoc acceptance run, and the existing 3-test Playwright regression suite; advanced the current stage to Stage 3. |
 | 2026-07-23 | 1.0 | Stage 1 passed deterministic checks, real-site acceptance, and the existing Playwright regression suite; advanced the current stage to Stage 2. |
 | 2026-07-23 | 1.0 | Established the canonical 10-stage roadmap and backlog-first planning rule. |

@@ -283,6 +283,19 @@ async function main(): Promise<void> {
               ]
             },
 
+            pageNovelty: {
+              predictedIdentity: {
+                areaKey:
+                  'review-page',
+
+                routeFamilyKey:
+                  '/review-page'
+              },
+
+              observedTemplateKey:
+                'observed-v1:synthetic-review'
+            },
+
             diagnostics,
 
             classifiedDiagnostics,

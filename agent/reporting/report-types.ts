@@ -31,6 +31,10 @@ import type {
 } from '../investigation/page-candidates';
 
 import type {
+  InspectedPageNovelty
+} from '../exploration/page-novelty';
+
+import type {
   ExploratoryLoopResult
 } from '../planning/run-exploratory-loop';
 
@@ -74,6 +78,12 @@ export interface InspectedPageResult {
   selection: SelectedNavigationTarget;
 
   observation: VisitedPageObservation;
+
+  /*
+   * Run-local predicted and observed page identities used
+   * to make page-type diversity decisions auditable.
+   */
+  pageNovelty: InspectedPageNovelty;
 
   /*
    * Raw browser evidence exactly as it was collected.

@@ -138,6 +138,19 @@ function createPageResult(
       ]
     },
 
+    pageNovelty: {
+      predictedIdentity: {
+        areaKey:
+          slug,
+
+        routeFamilyKey:
+          `/${slug}`
+      },
+
+      observedTemplateKey:
+        'observed-v1:synthetic-form'
+    },
+
     diagnostics,
 
     classifiedDiagnostics:
@@ -457,6 +470,16 @@ async function main(): Promise<void> {
   ) {
     throw new Error(
       'Markdown report does not contain the pages-inspected summary.'
+    );
+  }
+
+  if (
+    !markdown.includes(
+      'observed-v1:synthetic-form'
+    )
+  ) {
+    throw new Error(
+      'Markdown page summary does not expose the observed template identity.'
     );
   }
 

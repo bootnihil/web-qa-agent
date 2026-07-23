@@ -2,7 +2,7 @@
 
 **Backlog version:** 1.0  
 **Established:** 2026-07-23  
-**Current roadmap stage:** Stage 2 — Page-type diversity and run-level novelty
+**Current roadmap stage:** Stage 3 — Known-finding context
 
 This file is the parking place for work that should not silently interrupt the current roadmap stage.
 
@@ -28,12 +28,9 @@ A newly added backlog item does **not** become immediate work merely because it 
 
 | ID | Item | Target stage | Status | Notes |
 |---|---|---:|---|---|
-| CQ-003 | Track novelty across the full run | 2 | NOW | Avoid repeatedly spending budget on equivalent content. |
-| CQ-004 | Detect/represent page-type or template similarity | 2 | NOW | Near-identical pages should not receive equal exploration priority. |
-| CQ-005 | Prefer unexplored page types and functional areas | 2 | NOW | Use limited page budgets for broader meaningful coverage. |
-| CQ-006 | Pass known-finding context into later analysis | 3 | QUEUED | Gemini should know what has already been found. |
-| CQ-007 | Prioritize new findings over rediscovery | 3 | QUEUED | Reduce duplicate findings across pages/steps. |
-| CQ-008 | Allow useful evidence to strengthen an existing finding | 3 | QUEUED | Novel evidence should not be discarded just because the finding already exists. |
+| CQ-006 | Pass known-finding context into later analysis | 3 | NOW | Gemini should know what has already been found. |
+| CQ-007 | Prioritize new findings over rediscovery | 3 | NOW | Reduce duplicate findings across pages/steps. |
+| CQ-008 | Allow useful evidence to strengthen an existing finding | 3 | NOW | Novel evidence should not be discarded just because the finding already exists. |
 | CQ-009 | Expand the safe action vocabulary | 4 | QUEUED | Only after Stages 1–3 make action selection smarter. |
 | CQ-010 | Define a unified finding model | 5 | QUEUED | Browser, model, and deterministic evidence should converge on one finding. |
 | CQ-011 | Add explicit verification state to findings | 5 | QUEUED | Verified / Not Verified / Inconclusive or equivalent. |
@@ -64,6 +61,7 @@ These are valid future possibilities, but they are **not commitments to build th
 |---|---|---|---|
 | CQ-P001 | Windows/Desktop UI | PARKED | Architecture should permit it; implementation waits until the core/product direction is mature. |
 | CQ-P002 | Web/SaaS frontend | PARKED | Architecture should permit it; no decision yet between desktop, SaaS, or both. |
+| CQ-P003 | Review observedTemplateKey sensitivity across multiple real sites before tuning the structural-template algorithm | PARKED | The Stage 2 Aidoc run produced distinct observed template keys for all five selected pages. This may be legitimate, but the structural fingerprint may also be somewhat sensitive. Do not tune it based on one site/run; this was not a Stage 2 blocker. |
 
 ---
 
@@ -106,3 +104,6 @@ Move completed backlog entries here during stage-closeout reviews.
 |---|---|---|
 | CQ-001 | Tie autonomous investigation actions directly to candidate findings | Stage 1 — Candidate-driven investigation (2026-07-23) |
 | CQ-002 | Prevent irrelevant investigation from consuming the investigation budget | Stage 1 — Candidate-driven investigation (2026-07-23) |
+| CQ-003 | Track novelty across the full run | Stage 2 — Page-type diversity and run-level novelty (DONE — 2026-07-23) |
+| CQ-004 | Detect/represent page-type or template similarity | Stage 2 — Page-type diversity and run-level novelty (DONE — 2026-07-23) |
+| CQ-005 | Prefer unexplored page types and functional areas | Stage 2 — Page-type diversity and run-level novelty (DONE — 2026-07-23) |

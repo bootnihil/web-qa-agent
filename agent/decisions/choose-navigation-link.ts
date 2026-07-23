@@ -6,6 +6,11 @@ import {
 } from '../ai/run-gemini-request';
 
 import type {
+  NoveltyNavigationCandidate,
+  PredictedPageIdentity
+} from '../exploration/page-novelty';
+
+import type {
   NavigationLink
 } from '../browser/inspect-navigation';
 
@@ -42,6 +47,7 @@ const finishArguments =
 export interface NavigationChoice {
   type: 'link';
   link: NavigationLink;
+  predictedIdentity: PredictedPageIdentity;
   reason: string;
 }
 
@@ -56,10 +62,11 @@ export type NavigationDecision =
 
 export async function chooseNavigationLink(
   site: SiteConfig,
-  links: NavigationLink[]
+  candidates: NoveltyNavigationCandidate[]
 ): Promise<NavigationDecision> {
   if (
-    links.length === 0
+    candidates.length ===
+    0
   ) {
     return {
       type:
@@ -97,7 +104,7 @@ export async function chooseNavigationLink(
             0,
 
           maximum:
-            links.length - 1,
+            candidates.length - 1,
 
           description:
             'The zero-based list position of the navigation link to inspect.'
@@ -150,18 +157,42 @@ export async function chooseNavigationLink(
   };
 
   const numberedLinks =
-    links.map(
+    candidates.map(
       (
-        link,
+        candidate,
         index
       ) => ({
         index,
 
         text:
-          link.text,
+          candidate.link.text,
 
         url:
-          link.url
+          candidate.link.url,
+
+        areaKey:
+          candidate
+            .predictedIdentity
+            .areaKey,
+
+        routeFamilyKey:
+          candidate
+            .predictedIdentity
+            .routeFamilyKey,
+
+        novelty:
+          candidate.noveltyTier,
+
+        previousAreaVisits:
+          candidate.areaVisitCount,
+
+        previousRouteFamilyVisits:
+          candidate
+            .routeFamilyVisitCount,
+
+        previousObservedTemplateVisits:
+          candidate
+            .observedTemplateVisitCount
       })
     );
 
@@ -196,6 +227,10 @@ Choose one useful, representative internal navigation link for the next page ins
 
 Rules:
 - Choose only from the supplied numbered list.
+- Prefer an unseen area when it is safe and meaningfully useful.
+- Otherwise prefer an unseen route family within a known area.
+- Previously seen route families remain valid when they are the best useful options.
+- Treat novelty metadata as prioritization guidance, never as permission to bypass safety.
 - Prefer an informative content or product page.
 - Do not choose a form, demo-booking page, search page or destructive action.
 - Do not invent a URL.
@@ -259,7 +294,7 @@ ${JSON.stringify(
       );
 
     const selectedLink =
-      links[
+      candidates[
         argumentsResult.linkIndex
       ];
 
@@ -274,7 +309,11 @@ ${JSON.stringify(
         'link',
 
       link:
-        selectedLink,
+        selectedLink.link,
+
+      predictedIdentity:
+        selectedLink
+          .predictedIdentity,
 
       reason:
         argumentsResult.reason
