@@ -2,7 +2,7 @@
 
 **Roadmap version:** 1.0  
 **Frozen on:** 2026-07-23  
-**Current stage:** Stage 4 — Broaden the safe action vocabulary
+**Current stage:** Stage 5 — Finding unification and static verification
 
 ## How this roadmap is used
 
@@ -86,11 +86,22 @@ Gemini should prioritize new defects instead of repeatedly rediscovering the sam
 
 # Stage 4 — Broaden the safe action vocabulary
 
+**Completed:** 2026-07-23
+
 ## Goal
 
 Give CheckQuest more ways to investigate a website without violating the production-safe, non-destructive operating model.
 
-Potential areas include additional safe controls, navigation patterns, expandable UI, tabs, filters, and form-like interactions that do not create destructive or irreversible effects.
+Stage 4 delivered two explicit candidate-driven interaction types:
+
+- guarded informational disclosure state investigation;
+- guarded conventional ARIA tab selection and panel investigation.
+
+Both actions require exact structured evidence targets and deterministic candidate/action identity matching. Browser execution runs inside a fail-closed containment boundary with zero-new-request enforcement, navigation/form/popup/download/realtime/service-worker protection, deterministic transition evidence, and mandatory verified rollback.
+
+Successful guarded investigations can produce explicit deterministic verification outcomes and participate in run-local known-finding suppression.
+
+Stage 4 did **not** introduce generic click capability, planner-controlled selectors or JavaScript, or support for menus, dialogs, filters, dropdown widgets, arbitrary navigation, or other interaction types.
 
 ## Completion criteria
 
@@ -108,6 +119,8 @@ Potential areas include additional safe controls, navigation patterns, expandabl
 Combine browser observations, Gemini reasoning, evidence, and deterministic/static checks into one coherent finding model.
 
 CheckQuest should distinguish between something it suspects and something it has actually demonstrated.
+
+Stage 4 established target-specific deterministic outcomes for guarded disclosure and tab investigations. Stage 5 builds on that foundation by unifying model-generated findings, browser observations, deterministic interaction evidence, and future static checks in one coherent finding representation.
 
 ## Completion criteria
 
@@ -130,7 +143,7 @@ Improve where CheckQuest goes after the investigation engine itself is mature.
 
 ## Scope
 
-- Better coverage of the supplied start URL.
+- Build on the guaranteed page-1 inspection of the configured start URL.
 - Smarter selection of meaningful application areas.
 - Navigation-depth and page-budget strategy.
 - Avoidance of dead ends and low-value routes.
@@ -312,6 +325,7 @@ Before moving to the next stage:
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-07-23 | 1.0 | Stage 4 added candidate-linked guarded disclosure and conventional ARIA tab investigation with exact identities, fail-closed browser containment, deterministic transition evidence, mandatory rollback, known-finding integration, deterministic coverage, and real Chromium localhost acceptance. Real-site trials also confirmed conservative ineligibility rejection and zero-new-request fail-closed behavior. A start-page defect found during acceptance was corrected so the configured start URL is inspected through the same authoritative page-inspection path and consumes the page budget. Advanced the current stage to Stage 5. |
 | 2026-07-23 | 1.0 | Stage 3 passed deterministic checks, a five-page real-site Aidoc acceptance run, report/JSON acceptance review, and the final Playwright regression suite; acceptance produced one logical Equador finding with four affected-page occurrences, one actual verification, and three redundant investigations skipped. One Playwright test initially hit a transient timeout, then passed in isolation, and the full suite subsequently passed 3/3; advanced the current stage to Stage 4. |
 | 2026-07-23 | 1.0 | Stage 2 passed deterministic checks, navigation-choice integration, a five-page real-site Aidoc acceptance run, and the existing 3-test Playwright regression suite; advanced the current stage to Stage 3. |
 | 2026-07-23 | 1.0 | Stage 1 passed deterministic checks, real-site acceptance, and the existing Playwright regression suite; advanced the current stage to Stage 2. |

@@ -2,7 +2,7 @@
 
 **Backlog version:** 1.0  
 **Established:** 2026-07-23  
-**Current roadmap stage:** Stage 4 — Broaden the safe action vocabulary
+**Current roadmap stage:** Stage 5 — Finding unification and static verification
 
 This file is the parking place for work that should not silently interrupt the current roadmap stage.
 
@@ -28,15 +28,14 @@ A newly added backlog item does **not** become immediate work merely because it 
 
 | ID | Item | Target stage | Status | Notes |
 |---|---|---:|---|---|
-| CQ-009 | Expand the safe action vocabulary | 4 | NOW | Only after Stages 1–3 make action selection smarter. |
-| CQ-010 | Define a unified finding model | 5 | QUEUED | Browser, model, and deterministic evidence should converge on one finding. |
-| CQ-011 | Add explicit verification state to findings | 5 | QUEUED | Verified / Not Verified / Inconclusive or equivalent. |
-| CQ-012 | Allow deterministic/static evidence to confirm or contradict model observations | 5 | QUEUED | Prevent unsupported model claims from being presented as confirmed defects. |
-| CQ-013 | Improve complete inspection of the supplied start URL | 6 | QUEUED | Improve meaningful coverage without uncontrolled crawling. |
+| CQ-010 | Define a unified finding model | 5 | NOW | Browser observations, model reasoning, guarded-interaction evidence, and future static evidence should converge on one finding representation. |
+| CQ-011 | Add explicit verification state to findings | 5 | NOW | Stage 4 guarded investigations already produce Verified / Not Verified / Inconclusive outcomes; Stage 5 should represent verification consistently across findings and evidence sources. |
+| CQ-012 | Allow deterministic/static evidence to confirm or contradict model observations | 5 | NOW | Generalize the deterministic verification foundation from guarded actions so unsupported model claims are not presented as confirmed defects. |
+| CQ-013 | Improve complete inspection of the supplied start URL | 6 | QUEUED | The configured start URL is now guaranteed to receive full page-1 inspection and consume the page budget. Stage 6 retains the broader coverage and navigation-strategy work. |
 | CQ-014 | Improve navigation-depth and page-budget strategy | 6 | QUEUED | Spend exploration budget on higher-value routes. |
 | CQ-015 | Avoid dead-end and low-value navigation routes | 6 | QUEUED | Navigation should serve coverage, not movement for its own sake. |
 | CQ-016 | Add a separate passive security/infrastructure posture layer | 7 | QUEUED | Passive only; CheckQuest is not a penetration-testing tool. |
-| CQ-017 | Review large files and responsibility boundaries | 8 | QUEUED | DevAnalyzer takeaway; refactor only where it materially improves the codebase. |
+| CQ-017 | Review large files and responsibility boundaries | 8 | QUEUED | DevAnalyzer takeaway; refactor only where it materially improves the codebase. Consider moving the shared guarded-interaction safety boundary out of the disclosure executor if that improves ownership and maintainability; this is not a current blocker. |
 | CQ-018 | Add/strengthen ESLint and static-quality checks | 8 | QUEUED | Include appropriate CI enforcement. |
 | CQ-019 | Expand unit/integration test depth around agent logic | 8 | QUEUED | Candidate handling, schemas, novelty, context, dedupe, verification, decision logic. |
 | CQ-020 | Harden error handling, retries, and observability | 8 | QUEUED | Include model, browser, configuration, logging, and progress failures. |
@@ -109,3 +108,5 @@ Move completed backlog entries here during stage-closeout reviews.
 | CQ-006 | Pass known-finding context into later analysis | Stage 3 — Known-finding context (DONE — 2026-07-23) |
 | CQ-007 | Prioritize new findings over rediscovery | Stage 3 — Known-finding context (DONE — 2026-07-23) |
 | CQ-008 | Allow useful evidence to strengthen an existing finding | Stage 3 — Known-finding context (DONE — 2026-07-23) |
+| CQ-009 | Expand the safe action vocabulary with guarded disclosure and conventional ARIA tab investigation | Stage 4 — Broaden the safe action vocabulary (DONE — 2026-07-23) |
+| CQ-028 | Inspect the configured start URL as page 1 through the authoritative page-inspection path | Stage 4 acceptance hardening (DONE — 2026-07-23) |
