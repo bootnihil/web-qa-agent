@@ -9,6 +9,9 @@ import {
   evaluateFindingInvestigationOutcome
 } from './investigation/evaluate-finding-investigation-outcome';
 import {
+  runPageInspectionSequence
+} from './exploration/run-page-inspection-sequence';
+import {
   assignPageCandidateReferences
 } from './investigation/page-candidates';
 import {
@@ -72,9 +75,184 @@ function selectDecision(
   };
 }
 
+interface SequenceTestPage {
+  source:
+    | 'start-url'
+    | 'agent-navigation';
+  url: string;
+}
+
+interface AnalyzedSequenceTestPage
+  extends SequenceTestPage {
+  analyzed: boolean;
+}
+
+interface StatefulSequenceTestPage
+  extends SequenceTestPage {
+  priorKnownPages: string[];
+}
+
 async function main(): Promise<void> {
   let plannerCalls = 0;
   let executorCalls = 0;
+
+  const singlePageNextRequests:
+    string[] = [];
+
+  const singlePageResults =
+    await runPageInspectionSequence<
+      SequenceTestPage,
+      AnalyzedSequenceTestPage
+    >({
+      startPage: {
+        source:
+          'start-url' as const,
+        url:
+          'https://example.com/start'
+      },
+      maxPages: 1,
+      inspectPage:
+        async pageInput => ({
+          ...pageInput,
+          analyzed: true
+        }),
+      getNextPage: async () => {
+        singlePageNextRequests.push(
+          'requested'
+        );
+
+        return {
+          source:
+            'agent-navigation' as const,
+          url:
+            'https://example.com/next'
+        };
+      }
+    });
+
+  assert.equal(
+    singlePageResults.length,
+    1
+  );
+  assert.equal(
+    singlePageResults[0].source,
+    'start-url'
+  );
+  assert.equal(
+    singlePageResults[0].analyzed,
+    true
+  );
+  assert.equal(
+    singlePageNextRequests.length,
+    0
+  );
+
+  let zeroLinkAnalysisCount =
+    0;
+
+  const zeroLinkResults =
+    await runPageInspectionSequence<
+      SequenceTestPage,
+      SequenceTestPage
+    >({
+      startPage: {
+        source:
+          'start-url' as const,
+        url:
+          'https://example.com/no-links'
+      },
+      maxPages: 3,
+      inspectPage:
+        async pageInput => {
+          zeroLinkAnalysisCount +=
+            1;
+
+          return pageInput;
+        },
+      getNextPage:
+        async () =>
+          null
+    });
+
+  assert.equal(
+    zeroLinkResults.length,
+    1
+  );
+  assert.equal(
+    zeroLinkAnalysisCount,
+    1
+  );
+
+  const remainingPages:
+    SequenceTestPage[] = [
+    {
+      source:
+        'agent-navigation' as const,
+      url:
+        'https://example.com/page-2'
+    },
+    {
+      source:
+        'agent-navigation' as const,
+      url:
+        'https://example.com/page-3'
+    }
+  ];
+
+  const knownPages:
+    string[] = [];
+
+  const multiPageResults =
+    await runPageInspectionSequence<
+      SequenceTestPage,
+      StatefulSequenceTestPage
+    >({
+      startPage: {
+        source:
+          'start-url' as const,
+        url:
+          'https://example.com/start'
+      },
+      maxPages: 3,
+      inspectPage:
+        async pageInput => {
+          const priorKnownPages = [
+            ...knownPages
+          ];
+
+          knownPages.push(
+            pageInput.url
+          );
+
+          return {
+            ...pageInput,
+            priorKnownPages
+          };
+        },
+      getNextPage:
+        async () =>
+          remainingPages.shift() ??
+          null
+    });
+
+  assert.deepEqual(
+    multiPageResults.map(
+      result =>
+        result.source
+    ),
+    [
+      'start-url',
+      'agent-navigation',
+      'agent-navigation'
+    ]
+  );
+  assert.deepEqual(
+    multiPageResults[1]
+      .priorKnownPages,
+    [
+      'https://example.com/start'
+    ]
+  );
 
   const unusedPage = null as unknown as Page;
   const dependencies = {
@@ -145,19 +323,58 @@ async function main(): Promise<void> {
     let observedPlannerCandidateReference:
       string | undefined;
 
-    const matching = await runExploratoryLoop(
-      page,
-      'https://example.com',
-      1,
-      pageCandidates,
-      {
-        plan: async input => {
-          observedPlannerCandidateReference =
-            input.investigableCandidates[0]?.reference;
+    const startPageInspection =
+      await runPageInspectionSequence({
+        startPage: {
+          source:
+            'start-url' as const,
+          pageUrl:
+            'https://example.com',
+          candidates:
+            pageCandidates
+        },
+        maxPages: 1,
+        inspectPage:
+          async input => ({
+            source:
+              input.source,
+            investigation:
+              await runExploratoryLoop(
+                page,
+                input.pageUrl,
+                1,
+                input.candidates,
+                {
+                  plan:
+                    async plannerInput => {
+                      observedPlannerCandidateReference =
+                        plannerInput
+                          .investigableCandidates[0]
+                          ?.reference;
 
-          return selectDecision('candidate-2', 'Equador');
+                      return selectDecision(
+                        'candidate-2',
+                        'Equador'
+                      );
+                    }
+                }
+              )
+          }),
+        getNextPage: async () => {
+          throw new Error(
+            'maxPages=1 must not request navigation after start-page investigation.'
+          );
         }
-      }
+      });
+
+    const matching =
+      startPageInspection[0]
+        .investigation;
+
+    assert.equal(
+      startPageInspection[0]
+        .source,
+      'start-url'
     );
 
     assert.equal(

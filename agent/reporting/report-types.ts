@@ -53,9 +53,19 @@ export interface HomepageObservation {
 }
 
 export interface SelectedNavigationTarget {
+  type: 'agent-navigation';
   link: NavigationLink;
   reason: string;
 }
+
+export interface StartUrlInspectionTarget {
+  type: 'start-url';
+  url: string;
+}
+
+export type PageInspectionSelection =
+  | StartUrlInspectionTarget
+  | SelectedNavigationTarget;
 
 /**
  * Connects one original exploratory QA candidate finding
@@ -78,7 +88,7 @@ export interface ExploratoryFindingResult {
 }
 
 export interface InspectedPageResult {
-  selection: SelectedNavigationTarget;
+  selection: PageInspectionSelection;
 
   observation: VisitedPageObservation;
 

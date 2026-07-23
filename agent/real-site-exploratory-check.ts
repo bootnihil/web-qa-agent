@@ -578,6 +578,8 @@ async function main(): Promise<void> {
         inspectedPages: [
           {
             selection: {
+              type:
+                'agent-navigation',
               link:
                 targetLink,
 

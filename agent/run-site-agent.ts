@@ -37,9 +37,11 @@ import {
   buildNoveltyCandidateWindow,
   createPageNoveltyState,
   predictPageIdentity,
-  registerInspectedPageNovelty,
-  registerPredictedPageIdentity
+  registerInspectedPageNovelty
 } from './exploration/page-novelty';
+import {
+  runPageInspectionSequence
+} from './exploration/run-page-inspection-sequence';
 
 import {
   evaluateFindingInvestigationOutcome
@@ -77,6 +79,19 @@ import type {
 import { writeJsonReport } from './reporting/write-json-report';
 import { writeMarkdownReport } from './reporting/write-markdown-report';
 import { getSiteConfig } from './sites';
+
+interface OpenPageInspectionInput {
+  selection:
+    InspectedPageResult['selection'];
+
+  observation:
+    InspectedPageResult['observation'];
+
+  predictedIdentity:
+    InspectedPageResult[
+      'pageNovelty'
+    ]['predictedIdentity'];
+}
 
 function addLinksToPool(
   linkPool: Map<string, NavigationLink>,
@@ -333,32 +348,6 @@ async function main(): Promise<void> {
       let redundantInvestigationsSkippedCount =
         0;
 
-      const homepageLinks =
-        await inspectNavigation(
-          page,
-          site.allowedHosts
-        );
-
-      addLinksToPool(
-        linkPool,
-        homepageLinks
-      );
-
-      registerPredictedPageIdentity(
-        pageNoveltyState,
-        predictPageIdentity(
-          homepageObservation.finalUrl,
-          homepageLinks
-        )
-      );
-
-      console.log(
-        `\nInitial safe navigation candidates found: ${homepageLinks.length}`
-      );
-
-      const inspectedPages:
-        InspectedPageResult[] = [];
-
       let agentSteps =
         0;
 
@@ -367,134 +356,237 @@ async function main(): Promise<void> {
         null =
           null;
 
-      while (
-        inspectedPages.length <
-          site.maxPages &&
-        agentSteps <
-          site.maxAgentSteps
-      ) {
-        const unvisitedLinks =
-          getUnvisitedLinks(
-            Array.from(
-              linkPool.values()
-            ),
-            visitedUrls
-          );
+      const startPageObservation:
+        InspectedPageResult['observation'] = {
+        ...homepageObservation,
 
-        const candidateLinks =
-          buildNoveltyCandidateWindow(
-            unvisitedLinks,
-            Array.from(
-              linkPool.values()
-            ),
-            pageNoveltyState,
-            20
-          );
+        headings:
+          (
+            await page
+              .locator('h1, h2')
+              .allTextContents()
+          )
+            .map(
+              heading =>
+                heading
+                  .replace(
+                    /\s+/g,
+                    ' '
+                  )
+                  .trim()
+            )
+            .filter(
+              heading =>
+                heading.length > 0
+            )
+            .slice(0, 10)
+      };
 
-        console.log(
-          `\nNavigation step ${agentSteps + 1}/${site.maxAgentSteps}`
-        );
+      const inspectedPages =
+        await runPageInspectionSequence<
+          OpenPageInspectionInput,
+          InspectedPageResult
+        >({
+          startPage: {
+            selection: {
+              type:
+                'start-url',
+              url:
+                site.startUrl
+            },
 
-        console.log(
-          `Pages inspected: ${inspectedPages.length}/${site.maxPages}`
-        );
+            observation:
+              startPageObservation,
 
-        console.log(
-          `Unvisited safe candidates available: ${unvisitedLinks.length}`
-        );
+            predictedIdentity:
+              predictPageIdentity(
+                homepageObservation
+                  .finalUrl
+              )
+          },
 
-        console.log(
-          `Diversified candidates supplied to Gemini: ${candidateLinks.length}`
-        );
+          maxPages:
+            site.maxPages,
 
-        if (
-          candidateLinks.length ===
-          0
-        ) {
-          outcome = {
-            type:
-              'finished',
+          getNextPage:
+            async completedPages => {
+              if (
+                agentSteps >=
+                site.maxAgentSteps
+              ) {
+                return null;
+              }
 
-            summary:
-              'No unvisited safe navigation links remained.'
-          };
+              const unvisitedLinks =
+                getUnvisitedLinks(
+                  Array.from(
+                    linkPool.values()
+                  ),
+                  visitedUrls
+                );
 
-          console.log(
-            '\nAgent exploration finished:'
-          );
+              const candidateLinks =
+                buildNoveltyCandidateWindow(
+                  unvisitedLinks,
+                  Array.from(
+                    linkPool.values()
+                  ),
+                  pageNoveltyState,
+                  20
+                );
 
-          console.log(
-            outcome.summary
-          );
+              console.log(
+                `\nNavigation step ${agentSteps + 1}/${site.maxAgentSteps}`
+              );
 
-          break;
-        }
+              console.log(
+                `Pages inspected: ${completedPages.length}/${site.maxPages}`
+              );
 
-        agentSteps += 1;
+              console.log(
+                `Unvisited safe candidates available: ${unvisitedLinks.length}`
+              );
 
-        const decision =
-          await chooseNavigationLink(
-            site,
-            candidateLinks
-          );
+              console.log(
+                `Diversified candidates supplied to Gemini: ${candidateLinks.length}`
+              );
 
-        if (
-          decision.type ===
-          'finish'
-        ) {
-          outcome = {
-            type:
-              'finished',
+              if (
+                candidateLinks.length ===
+                0
+              ) {
+                outcome = {
+                  type:
+                    'finished',
 
-            summary:
-              decision.summary
-          };
+                  summary:
+                    'No unvisited safe navigation links remained.'
+                };
 
-          console.log(
-            '\nAgent decision: FINISH'
-          );
+                console.log(
+                  '\nAgent exploration finished:'
+                );
 
-          console.log(
-            `Summary: ${decision.summary}`
-          );
+                console.log(
+                  outcome.summary
+                );
 
-          break;
-        }
+                return null;
+              }
 
-        console.log(
-          '\nAgent selected a navigation target:'
-        );
+              agentSteps += 1;
 
-        console.log(
-          `Text: ${decision.link.text}`
-        );
+              const decision =
+                await chooseNavigationLink(
+                  site,
+                  candidateLinks
+                );
 
-        console.log(
-          `URL: ${decision.link.url}`
-        );
+              if (
+                decision.type ===
+                'finish'
+              ) {
+                outcome = {
+                  type:
+                    'finished',
 
-        console.log(
-          `Reason: ${decision.reason}`
-        );
+                  summary:
+                    decision.summary
+                };
 
-        markUrlVisited(
-          visitedUrls,
-          decision.link.url
-        );
+                console.log(
+                  '\nAgent decision: FINISH'
+                );
 
-        diagnosticsCollector.reset();
+                console.log(
+                  `Summary: ${decision.summary}`
+                );
 
-        const pageObservation =
-          await visitApprovedLink(
-            page,
-            decision.link,
-            site.allowedHosts
-          );
+                return null;
+              }
 
-        markUrlVisited(
-          visitedUrls,
-          pageObservation.finalUrl
-        );
+              console.log(
+                '\nAgent selected a navigation target:'
+              );
+
+              console.log(
+                `Text: ${decision.link.text}`
+              );
+
+              console.log(
+                `URL: ${decision.link.url}`
+              );
+
+              console.log(
+                `Reason: ${decision.reason}`
+              );
+
+              markUrlVisited(
+                visitedUrls,
+                decision.link.url
+              );
+
+              diagnosticsCollector
+                .reset();
+
+              const pageObservation =
+                await visitApprovedLink(
+                  page,
+                  decision.link,
+                  site.allowedHosts
+                );
+
+              markUrlVisited(
+                visitedUrls,
+                pageObservation
+                  .finalUrl
+              );
+
+              return {
+                selection: {
+                  type:
+                    'agent-navigation',
+                  link:
+                    decision.link,
+                  reason:
+                    decision.reason
+                },
+
+                observation:
+                  pageObservation,
+
+                predictedIdentity:
+                  decision
+                    .predictedIdentity
+              };
+            },
+
+          inspectPage:
+            async (
+              currentPage,
+              pageIndex
+            ) => {
+              const {
+                observation:
+                  pageObservation,
+                predictedIdentity,
+                selection
+              } = currentPage;
+
+              console.log(
+                selection.type ===
+                  'start-url'
+                  ? '\nInspecting configured start page as page 1.'
+                  : '\nSelected page visited successfully:'
+              );
+
+              console.log(
+                JSON.stringify(
+                  pageObservation,
+                  null,
+                  2
+                )
+              );
 
         await page.waitForTimeout(
           1_000
@@ -537,18 +629,6 @@ async function main(): Promise<void> {
                 'needs-review'
             )
             .length;
-
-        console.log(
-          '\nSelected page visited successfully:'
-        );
-
-        console.log(
-          JSON.stringify(
-            pageObservation,
-            null,
-            2
-          )
-        );
 
         console.log(
           '\nBrowser diagnostics collected:'
@@ -609,11 +689,30 @@ async function main(): Promise<void> {
             page
           );
 
+        const startPageLinksForNovelty =
+          selection.type ===
+            'start-url'
+            ? await inspectNavigation(
+                page,
+                site.allowedHosts
+              )
+            : null;
+
+        const effectivePredictedIdentity =
+          selection.type ===
+            'start-url'
+            ? predictPageIdentity(
+                pageObservation
+                  .finalUrl,
+                startPageLinksForNovelty ??
+                  []
+              )
+            : predictedIdentity;
+
         const pageNovelty =
           registerInspectedPageNovelty(
             pageNoveltyState,
-            decision
-              .predictedIdentity,
+            effectivePredictedIdentity,
             pageContent
           );
 
@@ -999,8 +1098,7 @@ async function main(): Promise<void> {
           shouldCaptureScreenshot
         ) {
           const pageNumber =
-            inspectedPages.length +
-            1;
+            pageIndex + 1;
 
           const screenshot =
             await capturePageScreenshot(
@@ -1161,38 +1259,8 @@ async function main(): Promise<void> {
           );
         }
 
-        inspectedPages.push({
-          selection: {
-            link:
-              decision.link,
-
-            reason:
-              decision.reason
-          },
-
-          observation:
-            pageObservation,
-
-          pageNovelty,
-
-          diagnostics,
-
-          classifiedDiagnostics,
-
-          screenshotPath,
-
-          findings,
-
-          exploratoryQaAnalysis,
-
-          exploratoryInvestigation,
-
-          exploratoryFindingResults,
-
-          knownFindingOccurrences
-        });
-
         const discoveredLinks =
+          startPageLinksForNovelty ??
           await inspectNavigation(
             page,
             site.allowedHosts
@@ -1205,13 +1273,42 @@ async function main(): Promise<void> {
           );
 
         console.log(
-          `\nAdditional safe links discovered on this page: ${newlyAddedLinks}`
+          selection.type ===
+            'start-url'
+            ? `\nInitial safe navigation candidates found: ${discoveredLinks.length}`
+            : `\nAdditional safe links discovered on this page: ${newlyAddedLinks}`
         );
 
         console.log(
           `Total unique safe links in pool: ${linkPool.size}`
         );
-      }
+
+              return {
+                selection,
+
+                observation:
+                  pageObservation,
+
+                pageNovelty,
+
+                diagnostics,
+
+                classifiedDiagnostics,
+
+                screenshotPath,
+
+                findings,
+
+                exploratoryQaAnalysis,
+
+                exploratoryInvestigation,
+
+                exploratoryFindingResults,
+
+                knownFindingOccurrences
+              };
+            }
+        });
 
       if (
         outcome ===

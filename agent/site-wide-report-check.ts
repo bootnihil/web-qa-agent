@@ -111,18 +111,28 @@ function createPageResult(
     null;
 
   return {
-    selection: {
-      link: {
-        text:
-          title,
+    selection:
+      pageNumber === 1
+        ? {
+            type:
+              'start-url',
+            url:
+              pageUrl
+          }
+        : {
+            type:
+              'agent-navigation',
+            link: {
+              text:
+                title,
 
-        url:
-          pageUrl
-      },
+              url:
+                pageUrl
+            },
 
-      reason:
-        'Synthetic site-wide report check.'
-    },
+            reason:
+              'Synthetic site-wide report check.'
+          },
 
     observation: {
       requestedUrl:
@@ -491,6 +501,26 @@ async function main(): Promise<void> {
       'utf8'
     );
 
+  const parsedJsonReport =
+    JSON.parse(
+      json
+    ) as SiteAgentReport;
+
+  if (
+    parsedJsonReport
+      .inspectedPages[0]
+      ?.selection.type !==
+      'start-url' ||
+    parsedJsonReport
+      .inspectedPages[1]
+      ?.selection.type !==
+      'agent-navigation'
+  ) {
+    throw new Error(
+      'JSON page reporting does not distinguish start-page inspection from agent-selected navigation.'
+    );
+  }
+
   if (
     siteWideExploratoryFindings.length !==
     1
@@ -592,6 +622,19 @@ async function main(): Promise<void> {
   ) {
     throw new Error(
       'Markdown report does not contain the pages-inspected summary.'
+    );
+  }
+
+  if (
+    !markdown.includes(
+      '| [Radiology](https://example.com/radiology) | Configured start URL |'
+    ) ||
+    !markdown.includes(
+      '| [Platform](https://example.com/platform) | Agent-selected navigation |'
+    )
+  ) {
+    throw new Error(
+      'Markdown page reporting does not distinguish start-page inspection from agent-selected navigation.'
     );
   }
 
