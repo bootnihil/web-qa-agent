@@ -39,6 +39,10 @@ import {
   writeMarkdownReport
 } from './reporting/write-markdown-report';
 
+import {
+  createEmptyPassiveSecurityReport
+} from './security/passive-security-registry';
+
 async function main(): Promise<void> {
   const runId =
     'screenshot-trigger-check';
@@ -224,7 +228,7 @@ async function main(): Promise<void> {
     const report:
       SiteAgentReport = {
         reportSchemaVersion:
-          '2',
+          '3',
 
         runId,
 
@@ -338,6 +342,9 @@ async function main(): Promise<void> {
           canonicalFindings,
 
         siteWideExploratoryFindings,
+
+        passiveSecurity:
+          createEmptyPassiveSecurityReport(),
 
         summary: {
           pagesInspected:

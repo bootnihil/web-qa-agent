@@ -2,7 +2,7 @@
 
 **Roadmap version:** 1.0  
 **Frozen on:** 2026-07-23  
-**Current stage:** Stage 7 — Passive security and infrastructure posture
+**Current stage:** Stage 8 — Engineering hardening
 
 ## How this roadmap is used
 
@@ -206,6 +206,85 @@ cross-run exploration history.
 
 # Stage 7 — Passive security and infrastructure posture
 
+**Completed:** 2026-07-24
+
+Stage 7.1 delivered a dedicated passive-security model separate from
+`UnifiedFinding`, deterministic passive interpretation, capture from
+already-returned Playwright main-document responses, capture-time safe-header
+allowlisting and redaction, origin-level aggregation, and separate JSON and
+Markdown reporting under report schema version 3. The passive layer does not
+participate in Gemini analysis, planning, candidate investigation, or action
+execution, and it adds no security-specific browsing or probing.
+
+The completed deterministic rule set is:
+
+- `PS_HTTP_DOCUMENT`
+- `PS_HSTS_NOT_OBSERVED`
+- `PS_HSTS_NOT_ENFORCING`
+- `PS_CSP_RESPONSE_HEADER_NOT_OBSERVED`
+- `PS_NOSNIFF_NOT_ENFORCING`
+- `PS_FRAME_POLICY_NOT_OBSERVED`
+- `PS_TECHNOLOGY_DISCLOSURE`
+
+Local browser safety acceptance observed only the expected normal browsing
+traffic: `GET /start`, its natural redirect to `GET /home`, and `GET /next`.
+It introduced no HEAD, OPTIONS, TRACE, POST, PUT, PATCH, DELETE, guessed-path,
+security-navigation, form-submission, or payload-injection traffic.
+
+Bounded real-site acceptance used
+`npm run agent:run -- aidoc --pages 5` in run
+`2026-07-24T12-14-25-090Z`. It inspected 5/5 pages on one origin,
+`https://www.aidoc.com`, without changing the Stage 6 navigation or action
+budgets. The canonical passive result contained three origin-level logical
+observations and 15 occurrences:
+
+- one low-severity, high-confidence, defense-in-depth
+  `PS_CSP_RESPONSE_HEADER_NOT_OBSERVED` observation with five occurrences;
+- one informational, high-confidence `PS_TECHNOLOGY_DISCLOSURE` observation
+  for `Server: cloudflare` with five occurrences;
+- one informational, high-confidence `PS_TECHNOLOGY_DISCLOSURE` observation
+  for `X-Powered-By: WP Engine` with five occurrences.
+
+Manual review confirmed the expected suppressions: HTTPS final documents did
+not produce `PS_HTTP_DOCUMENT`; valid
+`Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+did not produce an HSTS observation; `X-Content-Type-Options: nosniff`
+suppressed the nosniff observation; and `X-Frame-Options: DENY` suppressed the
+frame-policy observation. CSP absence was described only as an enforcing
+response header not being observed, without a vulnerability or exploitability
+claim.
+
+JSON and Markdown agreed on three logical passive observations, 15
+occurrences, severity totals of medium 0, low 1, and info 2, and one origin.
+No sensitive security data was serialized.
+
+Stage 1–6 behavior remained intact: 5/5 pages were inspected, 4/6 navigation
+decisions were used, the planner made eight decisions and executed four
+investigation actions, five screenshots were captured, and six functional
+logical findings retained a highest severity of medium and final unified state
+of inconclusive. The canonical `Equador` behavior remained unchanged across
+four occurrences on pages 2–5: select-option investigation succeeded, while
+the semantic typo finding remained inconclusive because no trusted
+verification-capable evidence established the semantic claim. One additional
+placeholder occurrence relative to the prior run reflected normal Gemini
+wording variability and did not change page selection, budgets, actions,
+severity, or `Equador` semantics.
+
+Completion verification passed:
+
+- `npx tsc --noEmit`
+- `npm run agent:passive-security-check`
+- `npm run agent:passive-security-browser-check`
+- `npm run agent:passive-security-report-check`
+- `git diff --check`
+
+The implementation regression had already passed the external Playwright
+suite 3/3, unified finding/reconciliation/lifecycle/report checks, Stage 4A/4B
+safety and browser acceptance, Stage 6 navigation
+policy/route-value/redirect accounting, and run-option/budget checks. One
+timing-sensitive Stage 4A network-containment assertion failed once and passed
+immediately on isolated rerun; it was not a Stage 7 regression.
+
 ## Goal
 
 Add a separate passive security/infrastructure observation layer without turning CheckQuest into a penetration-testing tool.
@@ -372,6 +451,7 @@ Before moving to the next stage:
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-07-24 | 1.0 | Stage 7 added a separate deterministic passive security/infrastructure posture layer over normal main-document responses, with safe capture/redaction, origin aggregation, schema-v3 JSON/Markdown reporting, zero probe traffic, and successful local-browser, regression, and five-page Aidoc acceptance. Completed CQ-016 and advanced the current stage to Stage 8. |
 | 2026-07-24 | 1.0 | Stage 6 completed bounded, auditable breadth/depth navigation and conservative deterministic route-value prioritization, with successful deterministic, browser, Playwright, and five-page Aidoc acceptance. Completed CQ-013 through CQ-015 and advanced the current stage to Stage 7. |
 | 2026-07-24 | 1.0 | Stage 5 added the canonical unified finding lifecycle, explicit occurrence and logical verification, conservative rule/model reconciliation, traceable evidence semantics, Stage 3 compatibility projection, and authoritative schema-v2 JSON/Markdown reporting. External Playwright regression passed 3/3. The five-page Aidoc acceptance run `2026-07-24T07-02-21-200Z` passed canonical JSON/Markdown review, validated the assertion-specific verification boundary, and confirmed that the inconclusive Equador typo did not trigger verified suppression. Completed CQ-010 through CQ-012 and advanced the current stage to Stage 6. |
 | 2026-07-23 | 1.0 | Stage 4 added candidate-linked guarded disclosure and conventional ARIA tab investigation with exact identities, fail-closed browser containment, deterministic transition evidence, mandatory rollback, known-finding integration, deterministic coverage, and real Chromium localhost acceptance. Real-site trials also confirmed conservative ineligibility rejection and zero-new-request fail-closed behavior. A start-page defect found during acceptance was corrected so the configured start URL is inspected through the same authoritative page-inspection path and consumes the page budget. Advanced the current stage to Stage 5. |

@@ -51,6 +51,10 @@ import type {
 } from '../findings/finding-model';
 
 import type {
+  PassiveSecurityReport
+} from '../security/passive-security-model';
+
+import type {
   ExploratoryLoopResult
 } from '../planning/run-exploratory-loop';
 
@@ -212,7 +216,7 @@ export interface AgentRunOutcome {
 
 export interface SiteAgentReport {
   reportSchemaVersion:
-    '2';
+    '3';
 
   runId: string;
   startedAt: string;
@@ -253,6 +257,15 @@ export interface SiteAgentReport {
    */
   siteWideExploratoryFindings:
     SiteWideExploratoryFinding[];
+
+  /*
+   * Dedicated deterministic passive-security posture.
+   *
+   * This collection is intentionally separate from functional findings,
+   * verification, Gemini analysis, and autonomous investigation.
+   */
+  passiveSecurity:
+    PassiveSecurityReport;
 
   summary: {
     pagesInspected: number;

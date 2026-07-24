@@ -17,7 +17,9 @@ import {
   inspectNavigation
 } from './browser/inspect-navigation';
 
-import { visitApprovedLink } from './browser/visit-approved-link';
+import {
+  visitApprovedLinkWithPassiveSecurity
+} from './browser/visit-approved-link';
 
 import {
   applyAgentRunOptions,
@@ -100,6 +102,17 @@ import type {
 
 import { writeJsonReport } from './reporting/write-json-report';
 import { writeMarkdownReport } from './reporting/write-markdown-report';
+import {
+  captureMainDocumentSecurity
+} from './security/capture-main-document-security';
+import type {
+  PassivePageSecuritySnapshot
+} from './security/passive-security-model';
+import {
+  createPassiveSecurityRegistry,
+  getPassiveSecurityReport,
+  registerPassiveSecuritySnapshot
+} from './security/passive-security-registry';
 import { getSiteConfig } from './sites';
 
 interface OpenPageInspectionInput {
@@ -108,6 +121,9 @@ interface OpenPageInspectionInput {
 
   observation:
     InspectedPageResult['observation'];
+
+  passiveSecuritySnapshot:
+    PassivePageSecuritySnapshot;
 
   traversalDepth:
     number;
@@ -323,6 +339,9 @@ async function main(): Promise<void> {
       const pageNoveltyState =
         createPageNoveltyState();
 
+      const passiveSecurityRegistry =
+        createPassiveSecurityRegistry();
+
       const unifiedFindingRegistry =
         createUnifiedFindingRegistry();
 
@@ -385,6 +404,21 @@ async function main(): Promise<void> {
             .slice(0, 10)
       };
 
+      const startPagePassiveSecuritySnapshot =
+        await captureMainDocumentSecurity({
+          response:
+            homepageResponse,
+          requestedUrl:
+            homepageObservation
+              .requestedUrl,
+          finalUrl:
+            homepageObservation
+              .finalUrl,
+          pageTitle:
+            homepageObservation
+              .title
+        });
+
       const inspectedPages =
         await runPageInspectionSequence<
           OpenPageInspectionInput,
@@ -432,6 +466,9 @@ async function main(): Promise<void> {
 
             observation:
               startPageObservation,
+
+            passiveSecuritySnapshot:
+              startPagePassiveSecuritySnapshot,
 
             traversalDepth:
               0
@@ -605,8 +642,12 @@ async function main(): Promise<void> {
                 diagnosticsCollector
                   .reset();
 
-                const pageObservation =
-                  await visitApprovedLink(
+                const {
+                  observation:
+                    pageObservation,
+                  passiveSecuritySnapshot
+                } =
+                  await visitApprovedLinkWithPassiveSecurity(
                     page,
                     decision.link,
                     site.allowedHosts
@@ -700,6 +741,8 @@ async function main(): Promise<void> {
                   observation:
                     pageObservation,
 
+                  passiveSecuritySnapshot,
+
                   traversalDepth:
                     decision
                       .policyCandidate
@@ -716,9 +759,15 @@ async function main(): Promise<void> {
               const {
                 observation:
                   pageObservation,
+                passiveSecuritySnapshot,
                 selection,
                 traversalDepth
               } = currentPage;
+
+              registerPassiveSecuritySnapshot(
+                passiveSecurityRegistry,
+                passiveSecuritySnapshot
+              );
 
               console.log(
                 selection.type ===
@@ -1800,7 +1849,7 @@ async function main(): Promise<void> {
       const report:
         SiteAgentReport = {
         reportSchemaVersion:
-          '2',
+          '3',
 
         runId,
 
@@ -1832,6 +1881,11 @@ async function main(): Promise<void> {
           canonicalFindings,
 
         siteWideExploratoryFindings,
+
+        passiveSecurity:
+          getPassiveSecurityReport(
+            passiveSecurityRegistry
+          ),
 
         summary: {
           pagesInspected:

@@ -51,6 +51,10 @@ import {
   writeMarkdownReport
 } from './reporting/write-markdown-report';
 
+import {
+  createEmptyPassiveSecurityReport
+} from './security/passive-security-registry';
+
 function createCountryFinding(
   title: string,
   controlLabel: string | null,
@@ -521,7 +525,7 @@ async function main(): Promise<void> {
   const report:
     SiteAgentReport = {
     reportSchemaVersion:
-      '2',
+      '3',
 
     runId:
       'site-wide-report-check',
@@ -571,6 +575,9 @@ async function main(): Promise<void> {
       canonicalFindings,
 
     siteWideExploratoryFindings,
+
+    passiveSecurity:
+      createEmptyPassiveSecurityReport(),
 
     summary: {
       pagesInspected:

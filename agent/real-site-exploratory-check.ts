@@ -45,6 +45,9 @@ import type {
 
 import { writeJsonReport } from './reporting/write-json-report';
 import { writeMarkdownReport } from './reporting/write-markdown-report';
+import {
+  createEmptyPassiveSecurityReport
+} from './security/passive-security-registry';
 import { getSiteConfig } from './sites';
 
 function getHighestExploratoryQaSeverity(
@@ -561,7 +564,7 @@ async function main(): Promise<void> {
       const report:
         SiteAgentReport = {
         reportSchemaVersion:
-          '2',
+          '3',
 
         runId,
 
@@ -644,6 +647,9 @@ async function main(): Promise<void> {
           canonicalFindings,
 
         siteWideExploratoryFindings,
+
+        passiveSecurity:
+          createEmptyPassiveSecurityReport(),
 
         summary: {
           pagesInspected:

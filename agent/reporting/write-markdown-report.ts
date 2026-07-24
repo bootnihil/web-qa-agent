@@ -70,6 +70,27 @@ function formatSeverity(
   return severity.toUpperCase();
 }
 
+function formatHeaderValues(
+  values:
+    readonly string[]
+): string {
+  if (
+    values.length ===
+    0
+  ) {
+    return '';
+  }
+
+  return (
+    ` Values: ${values
+      .map(
+        value =>
+          `\`${value.replace(/`/g, '\\`')}\``
+      )
+      .join(', ')}.`
+  );
+}
+
 function escapeTableCell(
   value: string
 ): string {
@@ -223,6 +244,8 @@ export async function writeMarkdownReport(
     `| Highest exploratory severity | ${formatSeverity(report.summary.highestExploratoryQaSeverity)} |`,
     `| Actionable diagnostics | ${report.summary.actionableDiagnosticsCount} |`,
     `| Diagnostics needing review | ${report.summary.diagnosticsNeedingReviewCount} |`,
+    `| Passive security observations | ${report.passiveSecurity.summary.observationsCount} |`,
+    `| Passive security medium / low / info | ${report.passiveSecurity.summary.bySeverity.medium} / ${report.passiveSecurity.summary.bySeverity.low} / ${report.passiveSecurity.summary.bySeverity.info} |`,
     `| Run outcome | ${report.outcome.type.toUpperCase()} |`,
     '',
     report.outcome.summary,
@@ -342,6 +365,131 @@ export async function writeMarkdownReport(
           );
         }
       );
+  }
+
+  lines.push(
+    '## Passive Security Posture',
+    '',
+    report
+      .passiveSecurity
+      .disclaimer,
+    '',
+    `**Origins observed:** ${report.passiveSecurity.summary.originsObserved}  `,
+    `**Logical observations:** ${report.passiveSecurity.summary.observationsCount}  `,
+    `**Severity counts:** MEDIUM ${report.passiveSecurity.summary.bySeverity.medium}, LOW ${report.passiveSecurity.summary.bySeverity.low}, INFO ${report.passiveSecurity.summary.bySeverity.info}`,
+    '',
+    '### Category Summary',
+    '',
+    '| Category | Observations |',
+    '| --- | ---: |'
+  );
+
+  for (
+    const [
+      category,
+      count
+    ] of Object.entries(
+      report
+        .passiveSecurity
+        .summary
+        .byCategory
+    )
+  ) {
+    lines.push(
+      `| ${category} | ${count} |`
+    );
+  }
+
+  lines.push(
+    ''
+  );
+
+  if (
+    report
+      .passiveSecurity
+      .observations
+      .length ===
+    0
+  ) {
+    lines.push(
+      'No passive main-document security posture observations were produced.',
+      ''
+    );
+  } else {
+    for (
+      const observation of
+        report
+          .passiveSecurity
+          .observations
+    ) {
+      const affectedPageCount =
+        new Set(
+          observation
+            .occurrences
+            .map(
+              occurrence =>
+                occurrence.pageUrl
+            )
+        ).size;
+
+      lines.push(
+        `### ${observation.observationReference} - ${observation.title}`,
+        '',
+        `**Code:** ${observation.code}  `,
+        `**Posture:** ${observation.posture}  `,
+        `**Severity:** ${formatSeverity(observation.severity)}  `,
+        `**Confidence:** ${formatSeverity(observation.confidence)}  `,
+        `**Category:** ${observation.category}  `,
+        `**Scope:** ${observation.scope.type} — ${observation.scope.key}  `,
+        `**Observed on:** ${affectedPageCount} page${affectedPageCount === 1 ? '' : 's'} (${observation.occurrences.length} occurrence${observation.occurrences.length === 1 ? '' : 's'})`,
+        '',
+        observation.description,
+        ''
+      );
+
+      if (
+        observation.remediation !==
+        null
+      ) {
+        lines.push(
+          `**Conservative remediation:** ${observation.remediation}`,
+          ''
+        );
+      }
+
+      lines.push(
+        '#### Passive occurrences',
+        ''
+      );
+
+      for (
+        const occurrence of
+          observation
+            .occurrences
+      ) {
+        lines.push(
+          `##### ${createPageLink(occurrence.pageTitle, occurrence.pageUrl)}`,
+          '',
+          `**Response:** ${occurrence.responseUrl}`,
+          '',
+          '**Deterministic evidence:**',
+          ''
+        );
+
+        for (
+          const evidence of
+            occurrence.evidence
+        ) {
+          lines.push(
+            `- **${evidence.kind} / ${evidence.subject}:** ${evidence.summary}${formatHeaderValues(evidence.headerValues ?? [])}`
+          );
+        }
+
+        lines.push(
+          ''
+        );
+      }
+    }
   }
 
   lines.push(

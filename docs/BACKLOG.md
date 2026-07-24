@@ -2,7 +2,7 @@
 
 **Backlog version:** 1.0  
 **Established:** 2026-07-23  
-**Current roadmap stage:** Stage 7 — Passive security and infrastructure posture
+**Current roadmap stage:** Stage 8 — Engineering hardening
 
 This file is the parking place for work that should not silently interrupt the current roadmap stage.
 
@@ -28,8 +28,7 @@ A newly added backlog item does **not** become immediate work merely because it 
 
 | ID | Item | Target stage | Status | Notes |
 |---|---|---:|---|---|
-| CQ-016 | Add a separate passive security/infrastructure posture layer | 7 | NOW | Passive only; CheckQuest is not a penetration-testing tool. |
-| CQ-017 | Review large files and responsibility boundaries | 8 | QUEUED | DevAnalyzer takeaway; refactor only where it materially improves the codebase. Consider moving the shared guarded-interaction safety boundary out of the disclosure executor if that improves ownership and maintainability; this is not a current blocker. |
+| CQ-017 | Review large files and responsibility boundaries | 8 | NOW | Stage 8A. DevAnalyzer takeaway; refactor only where it materially improves the codebase. Consider moving the shared guarded-interaction safety boundary out of the disclosure executor if that improves ownership and maintainability; this is not a current blocker. |
 | CQ-018 | Add/strengthen ESLint and static-quality checks | 8 | QUEUED | Include appropriate CI enforcement. |
 | CQ-019 | Expand unit/integration test depth around agent logic | 8 | QUEUED | Candidate handling, schemas, novelty, context, dedupe, verification, decision logic. |
 | CQ-020 | Harden error handling, retries, and observability | 8 | QUEUED | Include model, browser, navigation-visit, configuration, logging, and progress failures, including conservative retry/recovery behavior. |
@@ -55,6 +54,7 @@ These are valid future possibilities, but they are **not commitments to build th
 | CQ-P005 | Improve planner behavior after sufficient candidate evidence is already gathered | PARKED | In real-site runs Gemini sometimes proposes a second comparison action such as selecting "Ecuador" after the targeted "Equador" interaction fact has already been demonstrated. Stage 1 correctly rejects that off-target action before browser execution. This is not a safety defect. A future refinement could encourage the planner to stop immediately once the candidate has sufficient interaction evidence rather than proposing an action the relevance gate will reject. |
 | CQ-P006 | Clarify legacy interaction-verification terminology in runtime console output | PARKED | Stage 5 canonical reports correctly distinguish a raw legacy `VERIFIED` interaction outcome from an inconclusive semantic finding. Consider changing console terminology to make that distinction clearer without altering the preserved raw outcome or canonical verification semantics. |
 | CQ-P007 | Evaluate optional future exploration refinements | PARKED | Consider URL identity/canonicalization and tracking-query normalization, evidence-led adaptive navigation-yield signals, multilingual deterministic route hints, and persisted cross-run navigation history only when supported by broader evidence. None is required for Stage 6 completion. |
+| CQ-P008 | Evaluate optional future passive-security posture enhancements | PARKED | Consider cookie posture with strict secret redaction, broader passive request/external-host inventory, TLS/browser infrastructure metadata, mixed-content diagnostics, visible form-action posture, and more advanced security-policy interpretation only when justified by product need and a safe privacy design. These were design recommendations, not Stage 7 completion requirements. |
 
 ---
 
@@ -112,3 +112,4 @@ Move completed backlog entries here during stage-closeout reviews.
 | CQ-013 | Complete supplied-start-URL inspection and representative bounded coverage through the global frontier, Stage 2 novelty, and Stage 6.1/6.2 policies; exhaustive or body-wide crawling is not required | Stage 6 — Exploration coverage and smarter navigation (DONE — 2026-07-24) |
 | CQ-014 | Add traversal depth/provenance, deterministic breadth/depth and budget policy, area/family diversification, bounded candidate windows, and redirect/final-URL accounting | Stage 6 — Exploration coverage and smarter navigation (DONE — 2026-07-24) |
 | CQ-015 | Add conservative deterministic weak/strong low-value prioritization that defers rather than excludes low-value routes; adaptive observed-yield learning is not required | Stage 6 — Exploration coverage and smarter navigation (DONE — 2026-07-24) |
+| CQ-016 | Add a separate passive security/infrastructure posture layer | Stage 7 — Passive security and infrastructure posture (DONE — 2026-07-24) |

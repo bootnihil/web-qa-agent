@@ -1,4 +1,16 @@
-import type { Page } from '@playwright/test';
+import type {
+  Page,
+  Response
+} from '@playwright/test';
+
+import {
+  captureMainDocumentSecurity
+} from '../security/capture-main-document-security';
+
+import type {
+  PassivePageSecuritySnapshot
+} from '../security/passive-security-model';
+
 import type { NavigationLink } from './inspect-navigation';
 
 export interface VisitedPageObservation {
@@ -9,11 +21,25 @@ export interface VisitedPageObservation {
   headings: string[];
 }
 
-export async function visitApprovedLink(
+export interface PassiveApprovedPageVisit {
+  observation:
+    VisitedPageObservation;
+  passiveSecuritySnapshot:
+    PassivePageSecuritySnapshot;
+}
+
+interface ApprovedPageVisitCore {
+  observation:
+    VisitedPageObservation;
+  response:
+    Response | null;
+}
+
+async function visitApprovedLinkCore(
   page: Page,
   link: NavigationLink,
   allowedHosts: string[]
-): Promise<VisitedPageObservation> {
+): Promise<ApprovedPageVisitCore> {
   const requestedUrl = new URL(link.url);
 
   if (!allowedHosts.includes(requestedUrl.hostname)) {
@@ -40,17 +66,64 @@ export async function visitApprovedLink(
     .allTextContents();
 
   return {
-    requestedUrl: requestedUrl.toString(),
-    finalUrl: finalUrl.toString(),
-    title: await page.title(),
-    httpStatus: response?.status() ?? null,
-    headings: headings
-      .map((heading) =>
-        heading
-          .replace(/\s+/g, ' ')
-          .trim()
-      )
-      .filter((heading) => heading.length > 0)
-      .slice(0, 10)
+    observation: {
+      requestedUrl: requestedUrl.toString(),
+      finalUrl: finalUrl.toString(),
+      title: await page.title(),
+      httpStatus: response?.status() ?? null,
+      headings: headings
+        .map((heading) =>
+          heading
+            .replace(/\s+/g, ' ')
+            .trim()
+        )
+        .filter((heading) => heading.length > 0)
+        .slice(0, 10)
+    },
+    response
+  };
+}
+
+export async function visitApprovedLink(
+  page: Page,
+  link: NavigationLink,
+  allowedHosts: string[]
+): Promise<VisitedPageObservation> {
+  return (
+    await visitApprovedLinkCore(
+      page,
+      link,
+      allowedHosts
+    )
+  ).observation;
+}
+
+export async function visitApprovedLinkWithPassiveSecurity(
+  page: Page,
+  link: NavigationLink,
+  allowedHosts: string[]
+): Promise<PassiveApprovedPageVisit> {
+  const {
+    observation,
+    response
+  } =
+    await visitApprovedLinkCore(
+      page,
+      link,
+      allowedHosts
+    );
+
+  return {
+    observation,
+    passiveSecuritySnapshot:
+      await captureMainDocumentSecurity({
+        response,
+        requestedUrl:
+          observation.requestedUrl,
+        finalUrl:
+          observation.finalUrl,
+        pageTitle:
+          observation.title
+      })
   };
 }

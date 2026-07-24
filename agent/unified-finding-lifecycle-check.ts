@@ -44,6 +44,10 @@ import {
   writeMarkdownReport
 } from './reporting/write-markdown-report';
 
+import {
+  createEmptyPassiveSecurityReport
+} from './security/passive-security-registry';
+
 function createRule(
   code: string,
   pageUrl: string,
@@ -1018,7 +1022,7 @@ async function main():
   const report:
     SiteAgentReport = {
     reportSchemaVersion:
-      '2',
+      '3',
     runId:
       'unified-finding-lifecycle-check',
     startedAt:
@@ -1053,6 +1057,8 @@ async function main():
     findings,
     siteWideExploratoryFindings:
       siteWideProjection,
+    passiveSecurity:
+      createEmptyPassiveSecurityReport(),
     summary: {
       pagesInspected:
         0,
