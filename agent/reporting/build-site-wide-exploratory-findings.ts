@@ -1,311 +1,209 @@
 import type {
   ExploratoryQaFinding
 } from '../analysis/exploratory-qa-schema';
-import {
-  createExploratoryFindingFingerprint
-} from '../investigation/finding-fingerprint';
 import type {
-  KnownFindingMatchingBasis,
-  KnownFindingOccurrence
-} from '../investigation/known-findings';
+  UnifiedFinding
+} from '../findings/finding-model';
 import type {
   FindingInvestigationOutcome
 } from '../investigation/evaluate-finding-investigation-outcome';
-
-export interface ExploratoryFindingPageInput {
-  pageUrl: string;
-
-  pageTitle: string;
-
-  screenshotPath:
-    string | null;
-
-  findings:
-    ExploratoryQaFinding[];
-
-  knownFindingOccurrences?:
-    KnownFindingOccurrence[];
-}
+import type {
+  KnownFindingMatchingBasis
+} from '../investigation/known-findings';
 
 export interface SiteWideFindingOccurrence {
-  /*
-   * Human-readable, one-based positions.
-   *
-   * These point back to the original per-page findings
-   * retained in the full report.
-   */
   pageNumber: number;
-
   findingNumber:
     number | null;
-
   pageUrl: string;
-
   pageTitle: string;
-
   screenshotPath:
     string | null;
-
   knownFindingReference:
     string | null;
-
   occurrenceEvidence:
     string[];
-
   matchingBases:
     KnownFindingMatchingBasis[];
-
   redundantInvestigationSkipped:
     boolean;
-
   verificationOutcome:
     FindingInvestigationOutcome | null;
 }
 
 export interface SiteWideExploratoryFinding {
-  /*
-   * Deterministic identity used to group equivalent
-   * exploratory findings across multiple pages.
-   */
   fingerprint: string;
-
-  /*
-   * The first finding placed in this group.
-   *
-   * The original findings remain available under
-   * inspectedPages; this is only the representative
-   * version displayed at site level.
-   */
   representativeFinding:
     ExploratoryQaFinding;
-
   occurrenceCount: number;
-
   affectedPageCount: number;
-
   occurrences:
     SiteWideFindingOccurrence[];
 }
 
-export function buildSiteWideExploratoryFindings(
-  pages:
-    ExploratoryFindingPageInput[]
-): SiteWideExploratoryFinding[] {
-  const groupedOccurrences =
-    new Map<
-      string,
-      {
-        representativeFinding:
-          ExploratoryQaFinding;
-
-        occurrences:
-          SiteWideFindingOccurrence[];
-      }
-    >();
-
-  pages.forEach(
-    (
-      page,
-      pageIndex
-    ) => {
-      page.findings.forEach(
-        (
-          finding,
-          findingIndex
-        ) => {
-          const fingerprint =
-            createExploratoryFindingFingerprint(
-              finding
-            );
-
-          const occurrence:
-            SiteWideFindingOccurrence = {
-            pageNumber:
-              pageIndex + 1,
-
-            findingNumber:
-              findingIndex + 1,
-
-            pageUrl:
-              page.pageUrl,
-
-            pageTitle:
-              page.pageTitle,
-
-            screenshotPath:
-              page.screenshotPath,
-
-            knownFindingReference:
-              null,
-
-            occurrenceEvidence: [
-              finding.evidence
-            ],
-
-            matchingBases: [
-              'initial-finding'
-            ],
-
-            redundantInvestigationSkipped:
-              false,
-
-            verificationOutcome:
-              null
-          };
-
-          const existingGroup =
-            groupedOccurrences.get(
-              fingerprint
-            );
-
-          if (
-            existingGroup
-          ) {
-            existingGroup
-              .occurrences
-              .push(
-                occurrence
-              );
-
-            return;
-          }
-
-          groupedOccurrences.set(
-            fingerprint,
-            {
-              representativeFinding:
-                finding,
-
-              occurrences: [
-                occurrence
-              ]
-            }
-          );
-        }
-      );
-
-      for (
-        const knownOccurrence of
-          page.knownFindingOccurrences ??
-          []
+function getModelFinding(
+  finding:
+    UnifiedFinding
+): ExploratoryQaFinding | null {
+  for (
+    const occurrence of
+      finding.occurrences
+  ) {
+    for (
+      const evidence of
+        occurrence.evidence
+    ) {
+      if (
+        evidence.rawSource
+          ?.type ===
+        'exploratory-qa-finding'
       ) {
-        const fingerprint =
-          knownOccurrence.fingerprint;
-
-        const occurrence:
-          SiteWideFindingOccurrence = {
-          pageNumber:
-            pageIndex + 1,
-
-          findingNumber:
-            null,
-
-          pageUrl:
-            knownOccurrence.pageUrl,
-
-          pageTitle:
-            knownOccurrence.pageTitle,
-
-          screenshotPath:
-            knownOccurrence.screenshotPath,
-
-          knownFindingReference:
-            knownOccurrence
-              .knownFindingReference,
-
-          occurrenceEvidence: [
-            ...knownOccurrence
-              .occurrenceEvidence
-          ],
-
-          matchingBases: [
-            ...knownOccurrence
-              .matchingBases
-          ],
-
-          redundantInvestigationSkipped:
-            knownOccurrence
-              .redundantInvestigationSkipped,
-
-          verificationOutcome:
-            knownOccurrence
-              .verificationOutcome
-        };
-
-        const existingGroup =
-          groupedOccurrences.get(
-            fingerprint
-          );
-
-        if (
-          existingGroup
-        ) {
-          const existingPageOccurrence =
-            existingGroup
-              .occurrences
-              .find(
-                item =>
-                  item.pageUrl ===
-                  occurrence.pageUrl
-              );
-
-          if (
-            existingPageOccurrence ===
-            undefined
-          ) {
-            existingGroup
-              .occurrences
-              .push(
-                occurrence
-              );
-          }
-
-          continue;
-        }
-
-        groupedOccurrences.set(
-          fingerprint,
-          {
-            representativeFinding:
-              knownOccurrence
-                .representativeFinding,
-
-            occurrences: [
-              occurrence
-            ]
-          }
-        );
+        return evidence
+          .rawSource
+          .value as
+            ExploratoryQaFinding;
       }
     }
-  );
+  }
 
-  return Array.from(
-    groupedOccurrences.entries()
-  ).map(
-    (
-      [
-        fingerprint,
-        group
-      ]
-    ) => ({
-      fingerprint,
+  return null;
+}
 
-      representativeFinding:
-        group.representativeFinding,
+function getInvestigationOutcome(
+  occurrence:
+    UnifiedFinding[
+      'occurrences'
+    ][number]
+): FindingInvestigationOutcome | null {
+  const evidence =
+    occurrence.evidence.find(
+      item =>
+        item.rawSource
+          ?.type ===
+        'finding-investigation-outcome'
+    );
 
-      occurrenceCount:
-        group.occurrences.length,
+  return (
+    evidence?.rawSource
+      ?.value as
+        FindingInvestigationOutcome |
+        undefined
+  ) ?? null;
+}
 
-      affectedPageCount:
-        new Set(
-          group.occurrences.map(
-            occurrence =>
-              occurrence.pageUrl
-          )
-        ).size,
+/**
+ * Stage 3 compatibility projection.
+ *
+ * Canonical identity, occurrences, evidence, and verification are already
+ * resolved in UnifiedFinding[]. This helper performs no grouping and cannot
+ * disagree with the authoritative run-level collection.
+ */
+export function buildSiteWideExploratoryFindings(
+  findings:
+    readonly UnifiedFinding[]
+): SiteWideExploratoryFinding[] {
+  const pageNumbers =
+    new Map<string, number>();
 
-      occurrences:
-        group.occurrences
-    })
+  let nextPageNumber =
+    1;
+
+  return findings.flatMap(
+    finding => {
+      const representativeFinding =
+        getModelFinding(
+          finding
+        );
+
+      if (
+        representativeFinding ===
+        null
+      ) {
+        return [];
+      }
+
+      const occurrences =
+        finding.occurrences.map(
+          occurrence => {
+            let pageNumber =
+              pageNumbers.get(
+                occurrence.pageUrl
+              );
+
+            if (
+              pageNumber ===
+              undefined
+            ) {
+              pageNumber =
+                nextPageNumber;
+
+              nextPageNumber +=
+                1;
+
+              pageNumbers.set(
+                occurrence.pageUrl,
+                pageNumber
+              );
+            }
+
+            return {
+              pageNumber,
+              findingNumber:
+                null,
+              pageUrl:
+                occurrence.pageUrl,
+              pageTitle:
+                occurrence.pageTitle,
+              screenshotPath:
+                occurrence
+                  .screenshotReferences[0] ??
+                null,
+              knownFindingReference:
+                finding
+                  .findingReference
+                  .startsWith(
+                    'known-'
+                  )
+                  ? finding
+                      .findingReference
+                  : null,
+              occurrenceEvidence:
+                occurrence.evidence.map(
+                  evidence =>
+                    evidence.summary
+                ),
+              matchingBases: [
+                'finding-fingerprint'
+              ] as
+                KnownFindingMatchingBasis[],
+              redundantInvestigationSkipped:
+                occurrence
+                  .redundantInvestigationSkipped,
+              verificationOutcome:
+                getInvestigationOutcome(
+                  occurrence
+                )
+            };
+          }
+        );
+
+      return [
+        {
+          fingerprint:
+            finding.fingerprint,
+          representativeFinding,
+          occurrenceCount:
+            occurrences.length,
+          affectedPageCount:
+            new Set(
+              occurrences.map(
+                occurrence =>
+                  occurrence.pageUrl
+              )
+            ).size,
+          occurrences
+        }
+      ];
+    }
   );
 }

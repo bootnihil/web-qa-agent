@@ -23,6 +23,9 @@ import type {
 import {
   buildSiteWideExploratoryFindings
 } from './reporting/build-site-wide-exploratory-findings';
+import {
+  reconcileFindingObservations
+} from './findings/reconcile-finding-observations';
 
 import type {
   SiteAgentReport
@@ -187,28 +190,39 @@ async function main(): Promise<void> {
      * This synthetic check has no exploratory findings, so the
      * resulting collection should be empty.
      */
+    const canonicalFindings =
+      reconcileFindingObservations({
+        pageUrl:
+          'https://example.com/review-page',
+        pageTitle:
+          'Review-Worthy Diagnostics Test',
+        ruleFindings:
+          findings,
+        modelFindings:
+          exploratoryQaAnalysis
+            .findings,
+        screenshotReferences:
+          screenshotPath ===
+            null
+            ? []
+            : [
+                screenshotPath
+              ]
+      }).findings;
+
     const siteWideExploratoryFindings =
-      buildSiteWideExploratoryFindings([
-        {
-          pageUrl:
-            'https://example.com/review-page',
-
-          pageTitle:
-            'Review-Worthy Diagnostics Test',
-
-          screenshotPath,
-
-          findings:
-            exploratoryQaAnalysis
-              .findings
-        }
-      ]);
+      buildSiteWideExploratoryFindings(
+        canonicalFindings
+      );
 
     const startedAt =
       new Date();
 
     const report:
       SiteAgentReport = {
+        reportSchemaVersion:
+          '2',
+
         runId,
 
         startedAt:
@@ -317,11 +331,30 @@ async function main(): Promise<void> {
           }
         ],
 
+        findings:
+          canonicalFindings,
+
         siteWideExploratoryFindings,
 
         summary: {
           pagesInspected:
             1,
+
+          logicalFindingsCount:
+            canonicalFindings.length,
+
+          findingOccurrencesCount:
+            canonicalFindings.reduce(
+              (
+                total,
+                finding
+              ) =>
+                total +
+                finding
+                  .occurrences
+                  .length,
+              0
+            ),
 
           findingsCount:
             findings.length,

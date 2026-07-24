@@ -99,6 +99,19 @@ export interface KnownFindingState {
   nextReferenceNumber: number;
 
   nextSequence: number;
+
+  /*
+   * Stage 5 runtime supplies canonical unified verification here.
+   * The legacy derivation remains only for isolated Stage 3 compatibility
+   * checks that construct this state without a unified registry.
+   */
+  verificationStatusProjection?:
+    (
+      fingerprint:
+        string
+    ) =>
+      FindingInvestigationStatus |
+      null;
 }
 
 export interface KnownFindingPromptContext {
@@ -174,7 +187,12 @@ export interface ReconciledPageFindings {
 const knownFindingContextLimit =
   20;
 
-export function createKnownFindingState():
+export function createKnownFindingState(
+  verificationStatusProjection?:
+    KnownFindingState[
+      'verificationStatusProjection'
+    ]
+):
   KnownFindingState {
   return {
     entriesByFingerprint:
@@ -187,7 +205,9 @@ export function createKnownFindingState():
       1,
 
     nextSequence:
-      1
+      1,
+
+    verificationStatusProjection
   };
 }
 
@@ -1207,10 +1227,23 @@ function updateKnownFindingEntry(
   state: KnownFindingState,
   entry: KnownFindingEntry
 ): void {
-  entry.effectiveVerificationStatus =
-    getEffectiveVerificationStatus(
-      entry.occurrences
-    );
+  if (
+    state
+      .verificationStatusProjection !==
+    undefined
+  ) {
+    entry.effectiveVerificationStatus =
+      state
+        .verificationStatusProjection(
+          entry.fingerprint
+        ) ??
+      'inconclusive';
+  } else {
+    entry.effectiveVerificationStatus =
+      getEffectiveVerificationStatus(
+        entry.occurrences
+      );
+  }
 
   entry.updatedSequence =
     state.nextSequence;

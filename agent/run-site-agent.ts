@@ -55,6 +55,21 @@ import {
   registerNewFinding
 } from './investigation/known-findings';
 import {
+  reconcileFindingObservations
+} from './findings/reconcile-finding-observations';
+import {
+  attachInvestigationOutcome,
+  createUnifiedFindingRegistry,
+  getUnifiedFindings,
+  getUnifiedFindingVerificationState,
+  markOccurrenceSuppressed,
+  registerCompatibilityOccurrence,
+  registerUnifiedPageFindings
+} from './findings/unified-finding-registry';
+import {
+  createExploratoryFindingFingerprint
+} from './investigation/finding-fingerprint';
+import {
   assignPageCandidateReferences,
   isInvestigablePageCandidate,
   type PageCandidateReference
@@ -336,8 +351,24 @@ async function main(): Promise<void> {
       const pageNoveltyState =
         createPageNoveltyState();
 
+      const unifiedFindingRegistry =
+        createUnifiedFindingRegistry();
+
+      const unifiedFingerprintAliases =
+        new Map<string, string>();
+
       const knownFindingState =
-        createKnownFindingState();
+        createKnownFindingState(
+          fingerprint =>
+            getUnifiedFindingVerificationState(
+              unifiedFindingRegistry,
+              unifiedFingerprintAliases
+                .get(
+                  fingerprint
+                ) ??
+              fingerprint
+            )
+        );
 
       let knownFindingsSuppliedToAnalysisCount =
         0;
@@ -802,11 +833,27 @@ async function main(): Promise<void> {
               knownFindingContext
           });
 
+        const reconciledFindingObservations =
+          reconcileFindingObservations({
+            pageUrl:
+              pageObservation.finalUrl,
+
+            pageTitle:
+              pageObservation.title,
+
+            ruleFindings:
+              findings,
+
+            modelFindings:
+              rawExploratoryQaAnalysis
+                .findings
+          });
+
         const reconciledPageFindings =
           reconcilePageFindings(
             knownFindingState,
-            rawExploratoryQaAnalysis
-              .findings,
+            reconciledFindingObservations
+              .candidateFindings,
             deterministicKnownOccurrenceDrafts
           );
 
@@ -827,6 +874,56 @@ async function main(): Promise<void> {
             .newFindings
             .length;
 
+        const unifiedFingerprintByModelIdentity =
+          new Map<string, string>();
+
+        rawExploratoryQaAnalysis
+          .findings
+          .forEach(
+            (
+              finding,
+              index
+            ) => {
+              const reconciliation =
+                reconciledFindingObservations
+                  .modelReconciliations[
+                    index
+                  ];
+
+              if (
+                reconciliation ===
+                undefined
+              ) {
+                return;
+              }
+
+              unifiedFingerprintByModelIdentity
+                .set(
+                  [
+                    createExploratoryFindingFingerprint(
+                      finding
+                    ),
+                    finding
+                      .relatedRuleCode ??
+                      ''
+                  ].join(
+                    '|related-rule|'
+                  ),
+                  reconciliation
+                    .fingerprint
+                );
+
+              unifiedFingerprintAliases
+                .set(
+                  createExploratoryFindingFingerprint(
+                    finding
+                  ),
+                  reconciliation
+                    .fingerprint
+                );
+            }
+          );
+
         const candidateInputs = [
           ...reconciledPageFindings
             .newFindings
@@ -834,7 +931,24 @@ async function main(): Promise<void> {
               finding => ({
                 finding,
                 knownFingerprint:
-                  null as string | null
+                  null as string | null,
+                unifiedFingerprint:
+                  unifiedFingerprintByModelIdentity
+                    .get(
+                      [
+                        createExploratoryFindingFingerprint(
+                          finding
+                        ),
+                        finding
+                          .relatedRuleCode ??
+                          ''
+                      ].join(
+                        '|related-rule|'
+                      )
+                    ) ??
+                  createExploratoryFindingFingerprint(
+                    finding
+                  )
               })
             ),
 
@@ -846,6 +960,9 @@ async function main(): Promise<void> {
                   item.finding,
 
                 knownFingerprint:
+                  item.fingerprint,
+
+                unifiedFingerprint:
                   item.fingerprint
               })
             )
@@ -865,6 +982,12 @@ async function main(): Promise<void> {
             string
           >();
 
+        const unifiedFingerprintByCandidateReference =
+          new Map<
+            PageCandidateReference,
+            string
+          >();
+
         pageCandidates.forEach(
           (
             candidate,
@@ -875,6 +998,15 @@ async function main(): Promise<void> {
                 index
               ]
                 .knownFingerprint;
+
+            unifiedFingerprintByCandidateReference
+              .set(
+                candidate.reference,
+                candidateInputs[
+                  index
+                ]
+                  .unifiedFingerprint
+              );
 
             if (
               knownFingerprint !==
@@ -1123,6 +1255,72 @@ async function main(): Promise<void> {
           );
         }
 
+        registerUnifiedPageFindings(
+          unifiedFindingRegistry,
+          reconciledFindingObservations
+            .findings,
+          screenshotPath
+        );
+
+        for (
+          const draft of
+            reconciledPageFindings
+              .knownOccurrenceDrafts
+        ) {
+          if (
+            draft
+              .matchingBases
+              .includes(
+                'structured-target'
+              )
+          ) {
+            registerCompatibilityOccurrence(
+              unifiedFindingRegistry,
+              {
+                fingerprint:
+                  draft.fingerprint,
+                finding:
+                  draft.finding,
+                pageUrl:
+                  pageObservation
+                    .finalUrl,
+                pageTitle:
+                  pageObservation
+                    .title,
+                target:
+                  draft
+                    .evidenceTarget,
+                evidenceSummaries:
+                  draft
+                    .occurrenceEvidence,
+                screenshotPath,
+                redundantInvestigationSkipped:
+                  draft
+                    .redundantInvestigationSkipped
+              }
+            );
+          }
+
+          if (
+            draft
+              .redundantInvestigationSkipped
+          ) {
+            markOccurrenceSuppressed(
+              unifiedFindingRegistry,
+              {
+                fingerprint:
+                  draft.fingerprint,
+                pageUrl:
+                  pageObservation
+                    .finalUrl,
+                target:
+                  draft
+                    .evidenceTarget
+              }
+            );
+          }
+        }
+
         const findingResultByCandidateReference =
           new Map(
             exploratoryFindingResults.map(
@@ -1133,6 +1331,48 @@ async function main(): Promise<void> {
               ]
             )
           );
+
+        for (
+          const result of
+            exploratoryFindingResults
+        ) {
+          const unifiedFingerprint =
+            unifiedFingerprintByCandidateReference
+              .get(
+                result
+                  .candidateReference
+              );
+
+          if (
+            unifiedFingerprint ===
+            undefined
+          ) {
+            throw new Error(
+              `Candidate "${result.candidateReference}" is missing its unified finding identity.`
+            );
+          }
+
+          attachInvestigationOutcome(
+            unifiedFindingRegistry,
+            {
+              fingerprint:
+                unifiedFingerprint,
+              pageUrl:
+                pageObservation
+                  .finalUrl,
+              target:
+                result.finding
+                  .evidenceTarget,
+              finding:
+                result.finding,
+              outcome:
+                result.outcome,
+              candidateReference:
+                result
+                  .candidateReference
+            }
+          );
+        }
 
         const knownFindingOccurrences =
           reconciledPageFindings
@@ -1361,34 +1601,14 @@ async function main(): Promise<void> {
               .findings
         );
 
+      const canonicalFindings =
+        getUnifiedFindings(
+          unifiedFindingRegistry
+        );
+
       const siteWideExploratoryFindings =
         buildSiteWideExploratoryFindings(
-          inspectedPages.map(
-            pageResult => ({
-              pageUrl:
-                pageResult
-                  .observation
-                  .finalUrl,
-
-              pageTitle:
-                pageResult
-                  .observation
-                  .title,
-
-              screenshotPath:
-                pageResult
-                  .screenshotPath,
-
-              findings:
-                pageResult
-                  .exploratoryQaAnalysis
-                  .findings,
-
-              knownFindingOccurrences:
-                pageResult
-                  .knownFindingOccurrences
-            })
-          )
+          canonicalFindings
         );
 
       const allKnownFindingOccurrences =
@@ -1435,6 +1655,9 @@ async function main(): Promise<void> {
 
       const report:
         SiteAgentReport = {
+        reportSchemaVersion:
+          '2',
+
         runId,
 
         startedAt:
@@ -1461,18 +1684,37 @@ async function main(): Promise<void> {
 
         inspectedPages,
 
+        findings:
+          canonicalFindings,
+
         siteWideExploratoryFindings,
 
         summary: {
           pagesInspected:
             inspectedPages.length,
 
+          logicalFindingsCount:
+            canonicalFindings.length,
+
+          findingOccurrencesCount:
+            canonicalFindings.reduce(
+              (
+                total,
+                finding
+              ) =>
+                total +
+                finding
+                  .occurrences
+                  .length,
+              0
+            ),
+
           findingsCount:
             allFindings.length,
 
           highestSeverity:
             getHighestSeverity(
-              allFindings
+              canonicalFindings
             ),
 
           exploratoryQaFindingsCount:

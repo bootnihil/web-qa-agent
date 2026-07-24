@@ -21,6 +21,16 @@ import {
   createExploratoryFindingFingerprint
 } from './investigation/finding-fingerprint';
 import {
+  reconcileFindingObservations
+} from './findings/reconcile-finding-observations';
+import {
+  attachInvestigationOutcome,
+  createUnifiedFindingRegistry,
+  getUnifiedFindings,
+  registerCompatibilityOccurrence,
+  registerUnifiedPageFindings
+} from './findings/unified-finding-registry';
+import {
   assignPageCandidateReferences
 } from './investigation/page-candidates';
 
@@ -358,38 +368,112 @@ async function main(): Promise<void> {
       [];
   }
 
+  const registry =
+    createUnifiedFindingRegistry();
+
+  const firstReconciliation =
+    reconcileFindingObservations({
+      pageUrl:
+        inspectedPages[0]
+          .observation
+          .finalUrl,
+      pageTitle:
+        inspectedPages[0]
+          .observation
+          .title,
+      ruleFindings: [],
+      modelFindings: [
+        representativeFinding
+      ]
+    });
+
+  registerUnifiedPageFindings(
+    registry,
+    firstReconciliation
+      .findings,
+    inspectedPages[0]
+      .screenshotPath
+  );
+
+  attachInvestigationOutcome(
+    registry,
+    {
+      fingerprint,
+      pageUrl:
+        inspectedPages[0]
+          .observation
+          .finalUrl,
+      target:
+        representativeFinding
+          .evidenceTarget,
+      finding:
+        representativeFinding,
+      outcome:
+        inspectedPages[0]
+          .exploratoryFindingResults[0]
+          .outcome,
+      candidateReference:
+        inspectedPages[0]
+          .exploratoryFindingResults[0]
+          .candidateReference
+    }
+  );
+
+  for (
+    const pageResult of
+      inspectedPages.slice(
+        1
+      )
+  ) {
+    const knownOccurrence =
+      pageResult
+        .knownFindingOccurrences[0];
+
+    registerCompatibilityOccurrence(
+      registry,
+      {
+        fingerprint:
+          knownOccurrence
+            .fingerprint,
+        finding:
+          knownOccurrence
+            .representativeFinding,
+        pageUrl:
+          knownOccurrence
+            .pageUrl,
+        pageTitle:
+          knownOccurrence
+            .pageTitle,
+        target:
+          knownOccurrence
+            .evidenceTarget,
+        evidenceSummaries:
+          knownOccurrence
+            .occurrenceEvidence,
+        screenshotPath:
+          knownOccurrence
+            .screenshotPath,
+        redundantInvestigationSkipped:
+          true
+      }
+    );
+  }
+
+  const canonicalFindings =
+    getUnifiedFindings(
+      registry
+    );
+
   const siteWideExploratoryFindings =
     buildSiteWideExploratoryFindings(
-      inspectedPages.map(
-        pageResult => ({
-          pageUrl:
-            pageResult
-              .observation
-              .finalUrl,
-
-          pageTitle:
-            pageResult
-              .observation
-              .title,
-
-          screenshotPath:
-            pageResult
-              .screenshotPath,
-
-          findings:
-            pageResult
-              .exploratoryQaAnalysis
-              .findings,
-
-          knownFindingOccurrences:
-            pageResult
-              .knownFindingOccurrences
-        })
-      )
+      canonicalFindings
     );
 
   const report:
     SiteAgentReport = {
+    reportSchemaVersion:
+      '2',
+
     runId:
       'site-wide-report-check',
 
@@ -434,11 +518,22 @@ async function main(): Promise<void> {
 
     inspectedPages,
 
+    findings:
+      canonicalFindings,
+
     siteWideExploratoryFindings,
 
     summary: {
       pagesInspected:
         inspectedPages.length,
+
+      logicalFindingsCount:
+        canonicalFindings.length,
+
+      findingOccurrencesCount:
+        canonicalFindings[0]
+          .occurrences
+          .length,
 
       findingsCount:
         0,
@@ -567,7 +662,7 @@ async function main(): Promise<void> {
 
   if (
     !markdown.includes(
-      '| Unique exploratory findings | 1 |'
+      '| Logical findings | 1 |'
     )
   ) {
     throw new Error(
@@ -597,21 +692,67 @@ async function main(): Promise<void> {
 
   if (
     !markdown.includes(
-      '**Status:** VERIFIED'
+      '### 1. INCONCLUSIVE - Misspelled country name in selection list'
     )
   ) {
     throw new Error(
-      'Markdown finding does not contain the expected aggregated investigation status.'
+      'Markdown finding must not treat selectability as proof of the semantic typo assertion.'
     );
   }
 
   if (
     !markdown.includes(
-      '| [Radiology](https://example.com/radiology) | VERIFIED | [page-01.png](evidence/page-01.png) |'
+      '**Occurrence status:** INCONCLUSIVE'
     )
   ) {
     throw new Error(
-      'Markdown finding does not contain the expected concise occurrence row.'
+      'Markdown finding does not contain the conservative occurrence status.'
+    );
+  }
+
+  if (
+    parsedJsonReport
+      .findings[0]
+      .verification.state !==
+      'inconclusive' ||
+    parsedJsonReport
+      .findings[0]
+      .occurrences[0]
+      .verification.state !==
+      'inconclusive'
+  ) {
+    throw new Error(
+      'Canonical JSON must keep a semantic select-option finding inconclusive when investigation proves only selectability.'
+    );
+  }
+
+  const preservedInvestigation =
+    parsedJsonReport
+      .findings[0]
+      .occurrences[0]
+      .evidence.find(
+        evidence =>
+          evidence.kind ===
+          'investigation-outcome'
+      );
+
+  if (
+    preservedInvestigation
+      ?.verificationCapable !==
+      false ||
+    (
+      preservedInvestigation
+        .rawSource
+        ?.value as
+          {
+            status?: string;
+          } | undefined
+    )
+      ?.status !==
+      'verified'
+  ) {
+    throw new Error(
+      'Canonical evidence must preserve the raw verified outcome without making it verification-capable.'
     );
   }
 
@@ -696,25 +837,26 @@ async function main(): Promise<void> {
 
   /*
    * JSON remains the exhaustive execution record. Only the
-   * first occurrence was investigated; later known occurrences
-   * must not be represented as independently verified.
+   * first occurrence was investigated, but selectability does
+   * not prove the semantic typo assertion. Later known occurrences
+   * likewise must not be represented as independently verified.
    */
   if (
-    countOccurrences(
-      json,
-      '"status": "verified"'
-    ) !==
-    1
+    parsedJsonReport
+      .findings[0]
+      ?.occurrences[0]
+      ?.verification.state !==
+      'inconclusive'
   ) {
     throw new Error(
-      'JSON report does not contain the expected single verified finding outcome.'
+      'Canonical JSON does not contain the conservative first-occurrence verification state.'
     );
   }
 
   if (
     countOccurrences(
       markdown,
-      'KNOWN — NOT REINVESTIGATED'
+      'KNOWN, NOT REINVESTIGATED'
     ) <
     2
   ) {
@@ -746,7 +888,7 @@ async function main(): Promise<void> {
   );
 
   console.log(
-    'Synthetic finding outcomes: 1 verified, 2 known and not reinvestigated'
+    'Raw compatibility outcomes: 1 verified interaction, 2 known and not reinvestigated; canonical semantic finding remains inconclusive'
   );
 
   console.log(

@@ -1,0 +1,479 @@
+import type { ExploratoryQaFinding } from '../analysis/exploratory-qa-schema';
+import type { PageFinding } from '../analysis/evaluate-page';
+import {
+  createDisclosureStateTargetFingerprint,
+  createExploratoryFindingFingerprint,
+  createSelectOptionTargetFingerprint,
+  createTabStateTargetFingerprint,
+  normalizeFingerprintText
+} from '../investigation/finding-fingerprint';
+import {
+  adaptExploratoryQaFinding,
+  adaptPageFinding
+} from './current-finding-adapters';
+import {
+  deriveLogicalFindingVerification,
+  deriveOccurrenceVerification
+} from './derive-verification-state';
+import type {
+  FindingEvidence,
+  FindingOccurrence,
+  UnifiedFinding
+} from './finding-model';
+
+export type FindingObservationMatchingBasis =
+  | 'same-page-rule'
+  | 'structured-target'
+  | 'fallback-fingerprint';
+
+export interface ModelObservationReconciliation {
+  modelIndex: number;
+  fingerprint: string;
+  matchingBasis: FindingObservationMatchingBasis;
+  acceptedRelatedRuleCode: string | null;
+}
+
+export interface ExplicitFindingEvidenceContribution {
+  /**
+   * Evidence is accepted only for an exact finding fingerprint already present
+   * in this page's reconciliation input.
+   */
+  fingerprint: string;
+  evidence: FindingEvidence;
+}
+
+export interface ReconcileFindingObservationsInput {
+  pageUrl: string;
+  pageTitle: string;
+  ruleFindings: PageFinding[];
+  modelFindings: ExploratoryQaFinding[];
+  screenshotReferences?: string[];
+  evidenceContributions?: ExplicitFindingEvidenceContribution[];
+}
+
+export interface ReconciledPageFindingObservations {
+  findings: UnifiedFinding[];
+  /**
+   * Transitional input for the existing Stage 3 candidate/registry flow.
+   * There is at most one representative for each exact reconciled model group.
+   */
+  candidateFindings: ExploratoryQaFinding[];
+  modelReconciliations: ModelObservationReconciliation[];
+}
+
+interface FindingGroup {
+  finding: UnifiedFinding;
+  modelPresentationApplied: boolean;
+}
+
+export function createRuleFindingFingerprint(
+  finding: PageFinding
+): string {
+  return `rule|${finding.code}`;
+}
+
+function evidenceIdentity(evidence: FindingEvidence): string {
+  return JSON.stringify({
+    source: evidence.source,
+    kind: evidence.kind,
+    relation: evidence.relation,
+    verificationCapable: evidence.verificationCapable,
+    summary: evidence.summary,
+    rawSource: evidence.rawSource ?? null
+  });
+}
+
+function mergeEvidence(
+  target: FindingOccurrence,
+  incomingEvidence: FindingEvidence[]
+): void {
+  const knownEvidence = new Set(
+    target.evidence.map(evidenceIdentity)
+  );
+
+  for (const evidence of incomingEvidence) {
+    const identity = evidenceIdentity(evidence);
+
+    if (!knownEvidence.has(identity)) {
+      target.evidence.push(evidence);
+      knownEvidence.add(identity);
+    }
+  }
+
+  target.verification =
+    deriveOccurrenceVerification(target.evidence);
+}
+
+function refreshLogicalVerification(
+  finding: UnifiedFinding
+): void {
+  finding.verification =
+    deriveLogicalFindingVerification(
+      finding.occurrences
+    );
+}
+
+function targetIdentity(
+  target: FindingOccurrence['target']
+): string {
+  if (target === null) {
+    return 'target|null';
+  }
+
+  switch (target.kind) {
+    case 'select-option':
+      return createSelectOptionTargetFingerprint(
+        target
+      );
+
+    case 'disclosure-state':
+      return createDisclosureStateTargetFingerprint(
+        target
+      );
+
+    case 'tab-state':
+      return createTabStateTargetFingerprint(
+        target
+      );
+  }
+}
+
+function mergeOccurrence(
+  targetFinding: UnifiedFinding,
+  incomingOccurrence: FindingOccurrence
+): void {
+  const existingOccurrence =
+    targetFinding.occurrences.find(
+      occurrence =>
+        occurrence.pageUrl ===
+          incomingOccurrence.pageUrl &&
+        targetIdentity(occurrence.target) ===
+          targetIdentity(
+            incomingOccurrence.target
+          )
+    );
+
+  if (existingOccurrence) {
+    mergeEvidence(
+      existingOccurrence,
+      incomingOccurrence.evidence
+    );
+
+    const screenshotReferences =
+      new Set(
+        existingOccurrence
+          .screenshotReferences
+      );
+
+    for (
+      const reference of
+      incomingOccurrence.screenshotReferences
+    ) {
+      if (!screenshotReferences.has(reference)) {
+        existingOccurrence
+          .screenshotReferences
+          .push(reference);
+
+        screenshotReferences.add(reference);
+      }
+    }
+  } else {
+    targetFinding.occurrences.push(
+      incomingOccurrence
+    );
+  }
+
+  refreshLogicalVerification(targetFinding);
+}
+
+function mergeRuleFinding(
+  groups: Map<string, FindingGroup>,
+  finding: PageFinding,
+  ruleIndex: number,
+  pageTitle: string,
+  screenshotReferences: string[]
+): void {
+  const fingerprint =
+    createRuleFindingFingerprint(finding);
+
+  const adapted = adaptPageFinding(
+    finding,
+    {
+      findingReference:
+        `finding-${ruleIndex + 1}`,
+
+      fingerprint,
+
+      occurrenceReference:
+        `occurrence-${ruleIndex + 1}`,
+
+      pageTitle,
+      screenshotReferences
+    }
+  );
+
+  const existing = groups.get(fingerprint);
+
+  if (existing) {
+    for (
+      const occurrence of adapted.occurrences
+    ) {
+      mergeOccurrence(
+        existing.finding,
+        occurrence
+      );
+    }
+
+    return;
+  }
+
+  groups.set(fingerprint, {
+    finding: adapted,
+    modelPresentationApplied: false
+  });
+}
+
+function applyModelPresentation(
+  target: UnifiedFinding,
+  modelFinding: ExploratoryQaFinding
+): void {
+  if (target.description.length === 0) {
+    target.description =
+      modelFinding.reasoning;
+  } else if (
+    !target.description.includes(
+      modelFinding.reasoning
+    )
+  ) {
+    target.description =
+      `${target.description} Model observation: ${modelFinding.reasoning}`;
+  }
+
+  target.suggestedCheck ??=
+    modelFinding.suggestedCheck;
+}
+
+function hasExactRuleAssertionIdentity(
+  ruleFinding: PageFinding,
+  modelFinding: ExploratoryQaFinding
+): boolean {
+  /*
+   * relatedRuleCode is model-supplied correlation metadata, not trusted
+   * identity. Current deterministic rules are targetless, so a model finding
+   * with a structured target necessarily describes a different occurrence.
+   *
+   * For targetless observations, require exact normalized assertion content.
+   * A paraphrase remains separate until a stronger deterministic subject
+   * identity exists.
+   */
+  return (
+    modelFinding.evidenceTarget === null &&
+    normalizeFingerprintText(
+      modelFinding.title
+    ) ===
+      normalizeFingerprintText(
+        ruleFinding.title
+      ) &&
+    normalizeFingerprintText(
+      modelFinding.evidence
+    ) ===
+      normalizeFingerprintText(
+        ruleFinding.evidence
+      )
+  );
+}
+
+export function reconcileFindingObservations(
+  input: ReconcileFindingObservationsInput
+): ReconciledPageFindingObservations {
+  const screenshotReferences =
+    input.screenshotReferences ?? [];
+
+  const groups =
+    new Map<string, FindingGroup>();
+
+  const samePageRulesByCode = new Map(
+    input.ruleFindings.map(
+      finding => [
+        finding.code,
+        finding
+      ] as const
+    )
+  );
+
+  input.ruleFindings.forEach(
+    (finding, index) => {
+      mergeRuleFinding(
+        groups,
+        finding,
+        index,
+        input.pageTitle,
+        screenshotReferences
+      );
+    }
+  );
+
+  const candidateFindings:
+    ExploratoryQaFinding[] = [];
+
+  const candidateFingerprints =
+    new Set<string>();
+
+  const modelReconciliations:
+    ModelObservationReconciliation[] = [];
+
+  input.modelFindings.forEach(
+    (modelFinding, index) => {
+      const requestedRuleCode =
+        modelFinding.relatedRuleCode ?? null;
+
+      const requestedRule =
+        requestedRuleCode === null
+          ? undefined
+          : samePageRulesByCode.get(
+              requestedRuleCode
+            );
+
+      const acceptedRelatedRuleCode =
+        requestedRule !== undefined &&
+        hasExactRuleAssertionIdentity(
+          requestedRule,
+          modelFinding
+        )
+          ? requestedRuleCode
+          : null;
+
+      const fingerprint =
+        acceptedRelatedRuleCode === null
+          ? createExploratoryFindingFingerprint(
+              modelFinding
+            )
+          : `rule|${acceptedRelatedRuleCode}`;
+
+      const matchingBasis:
+        FindingObservationMatchingBasis =
+          acceptedRelatedRuleCode !== null
+            ? 'same-page-rule'
+            : modelFinding.evidenceTarget !==
+                  null &&
+                modelFinding.evidenceTarget !==
+                  undefined
+              ? 'structured-target'
+              : 'fallback-fingerprint';
+
+      const adapted =
+        adaptExploratoryQaFinding(
+          modelFinding,
+          {
+            findingReference:
+              `finding-${
+                input.ruleFindings.length +
+                index +
+                1
+              }`,
+
+            fingerprint,
+
+            occurrenceReference:
+              `occurrence-${
+                input.ruleFindings.length +
+                index +
+                1
+              }`,
+
+            pageUrl:
+              input.pageUrl,
+
+            pageTitle:
+              input.pageTitle,
+
+            screenshotReferences
+          }
+        );
+
+      const existing =
+        groups.get(fingerprint);
+
+      if (existing) {
+        for (
+          const occurrence of
+          adapted.occurrences
+        ) {
+          mergeOccurrence(
+            existing.finding,
+            occurrence
+          );
+        }
+
+        if (
+          !existing.modelPresentationApplied
+        ) {
+          applyModelPresentation(
+            existing.finding,
+            modelFinding
+          );
+
+          existing.modelPresentationApplied =
+            true;
+        }
+      } else {
+        groups.set(fingerprint, {
+          finding: adapted,
+          modelPresentationApplied: true
+        });
+      }
+
+      if (
+        !candidateFingerprints.has(
+          fingerprint
+        )
+      ) {
+        candidateFindings.push(modelFinding);
+        candidateFingerprints.add(
+          fingerprint
+        );
+      }
+
+      modelReconciliations.push({
+        modelIndex: index,
+        fingerprint,
+        matchingBasis,
+        acceptedRelatedRuleCode
+      });
+    }
+  );
+
+  for (
+    const contribution of
+    input.evidenceContributions ?? []
+  ) {
+    const group = groups.get(
+      contribution.fingerprint
+    );
+
+    const occurrence =
+      group?.finding.occurrences[0];
+
+    if (!group || !occurrence) {
+      continue;
+    }
+
+    mergeEvidence(
+      occurrence,
+      [contribution.evidence]
+    );
+
+    refreshLogicalVerification(
+      group.finding
+    );
+  }
+
+  return {
+    findings: Array.from(
+      groups.values(),
+      group => group.finding
+    ),
+    candidateFindings,
+    modelReconciliations
+  };
+}

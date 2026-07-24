@@ -24,6 +24,9 @@ import {
   evaluateFindingInvestigationOutcome
 } from './investigation/evaluate-finding-investigation-outcome';
 import {
+  reconcileFindingObservations
+} from './findings/reconcile-finding-observations';
+import {
   assignPageCandidateReferences
 } from './investigation/page-candidates';
 
@@ -524,27 +527,38 @@ async function main(): Promise<void> {
        * This check inspects only one page, but using the same
        * builder keeps the report contract and behavior aligned.
        */
+      const canonicalFindings =
+        reconcileFindingObservations({
+          pageUrl:
+            pageObservation
+              .finalUrl,
+          pageTitle:
+            pageObservation
+              .title,
+          ruleFindings:
+            findings,
+          modelFindings:
+            exploratoryQaAnalysis
+              .findings,
+          screenshotReferences:
+            screenshotPath ===
+              null
+              ? []
+              : [
+                  screenshotPath
+                ]
+        }).findings;
+
       const siteWideExploratoryFindings =
-        buildSiteWideExploratoryFindings([
-          {
-            pageUrl:
-              pageObservation
-                .finalUrl,
-
-            pageTitle:
-              pageObservation
-                .title,
-
-            screenshotPath,
-
-            findings:
-              exploratoryQaAnalysis
-                .findings
-          }
-        ]);
+        buildSiteWideExploratoryFindings(
+          canonicalFindings
+        );
 
       const report:
         SiteAgentReport = {
+        reportSchemaVersion:
+          '2',
+
         runId,
 
         startedAt:
@@ -622,11 +636,30 @@ async function main(): Promise<void> {
           }
         ],
 
+        findings:
+          canonicalFindings,
+
         siteWideExploratoryFindings,
 
         summary: {
           pagesInspected:
             1,
+
+          logicalFindingsCount:
+            canonicalFindings.length,
+
+          findingOccurrencesCount:
+            canonicalFindings.reduce(
+              (
+                total,
+                finding
+              ) =>
+                total +
+                finding
+                  .occurrences
+                  .length,
+              0
+            ),
 
           findingsCount:
             findings.length,

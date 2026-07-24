@@ -1,6 +1,5 @@
 import type {
-  FindingSeverity,
-  PageFinding
+  FindingSeverity
 } from '../analysis/evaluate-page';
 
 export function createRunId(date = new Date()): string {
@@ -10,7 +9,11 @@ export function createRunId(date = new Date()): string {
 }
 
 export function getHighestSeverity(
-  findings: PageFinding[]
+  findings:
+    readonly {
+      severity:
+        FindingSeverity;
+    }[]
 ): FindingSeverity | 'none' {
   if (
     findings.some(

@@ -36,6 +36,9 @@ import type {
 import type {
   InspectedPageNovelty
 } from '../exploration/page-novelty';
+import type {
+  UnifiedFinding
+} from '../findings/finding-model';
 
 import type {
   ExploratoryLoopResult
@@ -173,6 +176,9 @@ export interface AgentRunOutcome {
 }
 
 export interface SiteAgentReport {
+  reportSchemaVersion:
+    '2';
+
   runId: string;
   startedAt: string;
   finishedAt: string;
@@ -188,25 +194,39 @@ export interface SiteAgentReport {
   outcome: AgentRunOutcome;
 
   /*
-   * Full page-by-page observations and findings.
+   * Full page-by-page execution detail.
    *
-   * These remain the source of truth for everything
-   * the agent observed on each individual page.
+   * These retain raw observations, legacy compatibility fields, diagnostics,
+   * and investigation transcripts. Canonical finding interpretation lives in
+   * the run-level `findings` collection below.
    */
   inspectedPages:
     InspectedPageResult[];
 
   /*
-   * Deterministically grouped exploratory findings
-   * representing the site-wide QA view.
+   * Canonical run-level findings.
    *
-   * The original page-level findings are not removed.
+   * This is the sole authoritative finding collection for report consumers.
+   * Raw per-page fields remain exhaustive execution detail.
+   */
+  findings:
+    UnifiedFinding[];
+
+  /*
+   * Stage 3 compatibility projection generated from `findings`.
+   * It is not an independent source of truth.
    */
   siteWideExploratoryFindings:
     SiteWideExploratoryFinding[];
 
   summary: {
     pagesInspected: number;
+
+    logicalFindingsCount:
+      number;
+
+    findingOccurrencesCount:
+      number;
 
     findingsCount: number;
 

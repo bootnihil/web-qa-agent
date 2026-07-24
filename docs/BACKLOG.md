@@ -2,7 +2,7 @@
 
 **Backlog version:** 1.0  
 **Established:** 2026-07-23  
-**Current roadmap stage:** Stage 5 — Finding unification and static verification
+**Current roadmap stage:** Stage 6 — Exploration coverage and smarter navigation
 
 This file is the parking place for work that should not silently interrupt the current roadmap stage.
 
@@ -28,12 +28,9 @@ A newly added backlog item does **not** become immediate work merely because it 
 
 | ID | Item | Target stage | Status | Notes |
 |---|---|---:|---|---|
-| CQ-010 | Define a unified finding model | 5 | NOW | Browser observations, model reasoning, guarded-interaction evidence, and future static evidence should converge on one finding representation. |
-| CQ-011 | Add explicit verification state to findings | 5 | NOW | Stage 4 guarded investigations already produce Verified / Not Verified / Inconclusive outcomes; Stage 5 should represent verification consistently across findings and evidence sources. |
-| CQ-012 | Allow deterministic/static evidence to confirm or contradict model observations | 5 | NOW | Generalize the deterministic verification foundation from guarded actions so unsupported model claims are not presented as confirmed defects. |
-| CQ-013 | Improve complete inspection of the supplied start URL | 6 | QUEUED | The configured start URL is now guaranteed to receive full page-1 inspection and consume the page budget. Stage 6 retains the broader coverage and navigation-strategy work. |
-| CQ-014 | Improve navigation-depth and page-budget strategy | 6 | QUEUED | Spend exploration budget on higher-value routes. |
-| CQ-015 | Avoid dead-end and low-value navigation routes | 6 | QUEUED | Navigation should serve coverage, not movement for its own sake. |
+| CQ-013 | Improve complete inspection of the supplied start URL | 6 | NOW | The configured start URL is now guaranteed to receive full page-1 inspection and consume the page budget. Stage 6 retains the broader coverage and navigation-strategy work. |
+| CQ-014 | Improve navigation-depth and page-budget strategy | 6 | NOW | Spend exploration budget on higher-value routes. |
+| CQ-015 | Avoid dead-end and low-value navigation routes | 6 | NOW | Navigation should serve coverage, not movement for its own sake. |
 | CQ-016 | Add a separate passive security/infrastructure posture layer | 7 | QUEUED | Passive only; CheckQuest is not a penetration-testing tool. |
 | CQ-017 | Review large files and responsibility boundaries | 8 | QUEUED | DevAnalyzer takeaway; refactor only where it materially improves the codebase. Consider moving the shared guarded-interaction safety boundary out of the disclosure executor if that improves ownership and maintainability; this is not a current blocker. |
 | CQ-018 | Add/strengthen ESLint and static-quality checks | 8 | QUEUED | Include appropriate CI enforcement. |
@@ -58,8 +55,8 @@ These are valid future possibilities, but they are **not commitments to build th
 | CQ-P001 | Windows/Desktop UI | PARKED | Architecture should permit it; implementation waits until the core/product direction is mature. |
 | CQ-P002 | Web/SaaS frontend | PARKED | Architecture should permit it; no decision yet between desktop, SaaS, or both. |
 | CQ-P003 | Review observedTemplateKey sensitivity across multiple real sites before tuning the structural-template algorithm | PARKED | The Stage 2 Aidoc run produced distinct observed template keys for all five selected pages. This may be legitimate, but the structural fingerprint may also be somewhat sensitive. Do not tune it based on one site/run; this was not a Stage 2 blocker. |
-| CQ-P004 | Normalize first-occurrence verification representation in site-wide JSON | PARKED | Stage 3 reporting is correct in Markdown. Later known occurrences carry occurrence state directly. The first investigated occurrence currently has `verificationOutcome: null` in the site-wide occurrence object and refers indirectly to the page-level finding result. This is a reporting-model consistency cleanup only and was not a Stage 3 blocker. |
-| CQ-P005 | Improve planner behavior after sufficient candidate evidence is already gathered | PARKED | In real-site runs Gemini sometimes proposes a second comparison action such as selecting "Ecuador" after "Equador" has already been verified. Stage 1 correctly rejects that off-target action before browser execution. This is not a safety defect. A future refinement could encourage the planner to stop immediately once the candidate has sufficient evidence rather than proposing an action the relevance gate will reject. |
+| CQ-P005 | Improve planner behavior after sufficient candidate evidence is already gathered | PARKED | In real-site runs Gemini sometimes proposes a second comparison action such as selecting "Ecuador" after the targeted "Equador" interaction fact has already been demonstrated. Stage 1 correctly rejects that off-target action before browser execution. This is not a safety defect. A future refinement could encourage the planner to stop immediately once the candidate has sufficient interaction evidence rather than proposing an action the relevance gate will reject. |
+| CQ-P006 | Clarify legacy interaction-verification terminology in runtime console output | PARKED | Stage 5 canonical reports correctly distinguish a raw legacy `VERIFIED` interaction outcome from an inconclusive semantic finding. Consider changing console terminology to make that distinction clearer without altering the preserved raw outcome or canonical verification semantics. |
 
 ---
 
@@ -110,3 +107,7 @@ Move completed backlog entries here during stage-closeout reviews.
 | CQ-008 | Allow useful evidence to strengthen an existing finding | Stage 3 — Known-finding context (DONE — 2026-07-23) |
 | CQ-009 | Expand the safe action vocabulary with guarded disclosure and conventional ARIA tab investigation | Stage 4 — Broaden the safe action vocabulary (DONE — 2026-07-23) |
 | CQ-028 | Inspect the configured start URL as page 1 through the authoritative page-inspection path | Stage 4 acceptance hardening (DONE — 2026-07-23) |
+| CQ-P004 | Normalize first-occurrence verification representation in site-wide JSON | Stage 5.3 canonical unified finding lifecycle and reporting (DONE — 2026-07-23) |
+| CQ-010 | Define a unified finding model | Stage 5 — Finding unification and static verification (DONE — 2026-07-24) |
+| CQ-011 | Add explicit verification state to findings | Stage 5 — Finding unification and static verification (DONE — 2026-07-24) |
+| CQ-012 | Allow deterministic/static evidence to confirm or contradict model observations | Stage 5 — Finding unification and static verification (DONE — 2026-07-24) |

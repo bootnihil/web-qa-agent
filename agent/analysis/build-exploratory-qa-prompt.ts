@@ -144,6 +144,15 @@ It does NOT support saying that "Ecuador" was replaced by "Equador".
 
 Materially useful additional evidence includes a new affected page, direct structured-target evidence, or evidence that could strengthen or challenge the prior verification outcome.
 
+8A. Every finding MUST include a "relatedRuleCode" field.
+
+- Set relatedRuleCode to the exact code of one supplied ruleBasedFindings item only when the model observation repeats that same narrow targetless assertion on this page.
+- When relatedRuleCode is non-null, copy that rule finding's title and evidence exactly and set evidenceTarget to null. Runtime requires this exact assertion identity.
+- Otherwise set relatedRuleCode to null.
+- Do not infer a relationship from similar wording alone.
+- relatedRuleCode is advisory. It does not make model evidence deterministic or verification-capable.
+- Never invent a rule code that is not present in the supplied ruleBasedFindings.
+
 9. Every finding MUST include an "evidenceTarget" field.
 
 Use evidenceTarget only when the supplied structured evidence identifies a UI element precisely enough for automated evidence capture.
@@ -273,6 +282,7 @@ Return ONLY valid JSON with this exact structure:
   "findings": [
     {
       "knownFindingReference": null,
+      "relatedRuleCode": null,
       "category": "content",
       "severity": "low",
       "confidence": "high",
@@ -296,6 +306,7 @@ For a finding with no supported machine-readable target, use:
 
 {
   "knownFindingReference": null,
+  "relatedRuleCode": null,
   "category": "content",
   "severity": "low",
   "confidence": "high",

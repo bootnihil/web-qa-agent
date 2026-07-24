@@ -2,7 +2,7 @@
 
 **Roadmap version:** 1.0  
 **Frozen on:** 2026-07-23  
-**Current stage:** Stage 5 — Finding unification and static verification
+**Current stage:** Stage 6 — Exploration coverage and smarter navigation
 
 ## How this roadmap is used
 
@@ -113,6 +113,22 @@ Stage 4 did **not** introduce generic click capability, planner-controlled selec
 ---
 
 # Stage 5 — Finding unification and static verification
+
+**Completed:** 2026-07-24
+
+Stages 5.1–5.3 provide the unified finding/evidence model, conservative
+rule/model reconciliation, run-level occurrence aggregation, explicit derived
+verification, Stage 3 compatibility projection, and canonical JSON/Markdown
+reporting.
+
+Final acceptance included the external Playwright regression suite passing 3/3
+and the five-page Aidoc run `2026-07-24T07-02-21-200Z`. Canonical JSON and
+Markdown agreed across all findings and occurrences. The acceptance run
+validated the assertion-specific verification boundary: raw interaction
+evidence showed that the `Equador` option was selectable, while the semantic
+typo finding correctly remained inconclusive without a trusted explicit
+assessment. Later known occurrences were recognized without incorrectly
+triggering verified-finding suppression.
 
 ## Goal
 
@@ -325,6 +341,7 @@ Before moving to the next stage:
 
 | Date | Version | Change |
 |---|---|---|
+| 2026-07-24 | 1.0 | Stage 5 added the canonical unified finding lifecycle, explicit occurrence and logical verification, conservative rule/model reconciliation, traceable evidence semantics, Stage 3 compatibility projection, and authoritative schema-v2 JSON/Markdown reporting. External Playwright regression passed 3/3. The five-page Aidoc acceptance run `2026-07-24T07-02-21-200Z` passed canonical JSON/Markdown review, validated the assertion-specific verification boundary, and confirmed that the inconclusive Equador typo did not trigger verified suppression. Completed CQ-010 through CQ-012 and advanced the current stage to Stage 6. |
 | 2026-07-23 | 1.0 | Stage 4 added candidate-linked guarded disclosure and conventional ARIA tab investigation with exact identities, fail-closed browser containment, deterministic transition evidence, mandatory rollback, known-finding integration, deterministic coverage, and real Chromium localhost acceptance. Real-site trials also confirmed conservative ineligibility rejection and zero-new-request fail-closed behavior. A start-page defect found during acceptance was corrected so the configured start URL is inspected through the same authoritative page-inspection path and consumes the page budget. Advanced the current stage to Stage 5. |
 | 2026-07-23 | 1.0 | Stage 3 passed deterministic checks, a five-page real-site Aidoc acceptance run, report/JSON acceptance review, and the final Playwright regression suite; acceptance produced one logical Equador finding with four affected-page occurrences, one actual verification, and three redundant investigations skipped. One Playwright test initially hit a transient timeout, then passed in isolation, and the full suite subsequently passed 3/3; advanced the current stage to Stage 4. |
 | 2026-07-23 | 1.0 | Stage 2 passed deterministic checks, navigation-choice integration, a five-page real-site Aidoc acceptance run, and the existing 3-test Playwright regression suite; advanced the current stage to Stage 3. |

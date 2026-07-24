@@ -71,6 +71,22 @@ export const exploratoryQaFindingSchema = z.object({
     .nullable()
     .optional(),
 
+  /*
+   * Optional advisory link to one deterministic rule finding supplied
+   * for this exact page.
+   *
+   * Runtime reconciliation accepts it only when the exact code exists and
+   * the targetless model title/evidence exactly identify that rule assertion.
+   * A structured target is incompatible with current targetless rules.
+   * The reference never grants verification.
+   */
+  relatedRuleCode: z
+    .string()
+    .min(1)
+    .max(100)
+    .nullable()
+    .optional(),
+
   category: z.enum([
     'content',
     'navigation',

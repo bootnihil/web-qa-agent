@@ -5,6 +5,14 @@ import type {
 import {
   buildSiteWideExploratoryFindings
 } from './reporting/build-site-wide-exploratory-findings';
+import {
+  reconcileFindingObservations
+} from './findings/reconcile-finding-observations';
+import {
+  createUnifiedFindingRegistry,
+  getUnifiedFindings,
+  registerUnifiedPageFindings
+} from './findings/unified-finding-registry';
 
 function createCountryFinding(
   title: string,
@@ -52,9 +60,18 @@ function createCountryFinding(
 }
 
 function main(): void {
-  const siteWideFindings =
-    buildSiteWideExploratoryFindings([
-      {
+  const registry =
+    createUnifiedFindingRegistry();
+
+  const pages:
+    {
+      pageUrl: string;
+      pageTitle: string;
+      screenshotPath: string;
+      modelFindings:
+        ExploratoryQaFinding[];
+    }[] = [
+    {
         pageUrl:
           'https://example.com/radiology',
 
@@ -64,7 +81,7 @@ function main(): void {
         screenshotPath:
           'page-01.png',
 
-        findings: [
+        modelFindings: [
           createCountryFinding(
             'Misspelled country name in selection list',
             'COUNTRY*',
@@ -72,7 +89,7 @@ function main(): void {
           )
         ]
       },
-      {
+    {
         pageUrl:
           'https://example.com/platform',
 
@@ -82,7 +99,7 @@ function main(): void {
         screenshotPath:
           'page-02.png',
 
-        findings: [
+        modelFindings: [
           createCountryFinding(
             'Misspelled country name in registration form',
             'Country',
@@ -90,7 +107,7 @@ function main(): void {
           )
         ]
       },
-      {
+    {
         pageUrl:
           'https://example.com/solutions',
 
@@ -100,7 +117,7 @@ function main(): void {
         screenshotPath:
           'page-03.png',
 
-        findings: [
+        modelFindings: [
           /*
            * Deliberately classify this occurrence differently
            * from the first two.
@@ -142,7 +159,41 @@ function main(): void {
           }
         ]
       }
-    ]);
+  ];
+
+  for (
+    const page of
+      pages
+  ) {
+    const reconciled =
+      reconcileFindingObservations({
+        pageUrl:
+          page.pageUrl,
+        pageTitle:
+          page.pageTitle,
+        ruleFindings: [],
+        modelFindings:
+          page.modelFindings,
+        screenshotReferences: [
+          page.screenshotPath
+        ]
+      });
+
+    registerUnifiedPageFindings(
+      registry,
+      reconciled.findings
+    );
+  }
+
+  const canonicalFindings =
+    getUnifiedFindings(
+      registry
+    );
+
+  const siteWideFindings =
+    buildSiteWideExploratoryFindings(
+      canonicalFindings
+    );
 
   if (
     siteWideFindings.length !==
